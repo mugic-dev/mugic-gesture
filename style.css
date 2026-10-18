@@ -33,6 +33,7 @@ button, .file {
 button:hover:not(:disabled), .file:hover { background: var(--cream); }
 button:disabled { opacity: 0.4; cursor: default; }
 .file input { display: none; }
+input:not([type]) { font: inherit; font-size: 14px; padding: 5px 12px; border: 1px solid var(--line); border-radius: 999px; background: #fff; }
 button.small { font-size: 12px; padding: 3px 12px; }
 .banner button.small { background: transparent; color: #e6e3ee; border-color: #e6e3ee; }
 

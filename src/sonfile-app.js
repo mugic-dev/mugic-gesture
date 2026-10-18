@@ -31,7 +31,19 @@ let mode = 'student', modePicked = false;   // starts in Teacher only while ther
 let teacher = store.get('teacher') ?? [], refA = teacher.length ? ex.pool(teacher) : null;
 if (!refA) mode = 'teacher';
 let teacherBow = store.get('teacherBow'), calib = store.get('lastCalib');   // calib: latest take's, for the live view
-let newTeacher = false, refSource = store.get('refSource'), refMeta = store.get('refMeta') ?? '';   // where the reference came from, for display
+// The reference's stamp: the teacher's name, where it came from and when it was recorded (its latest teacher take),
+// for display and the file.
+let newTeacher = false, refSource = store.get('refSource'), refCreated = store.get('refCreated'), refTeacher = store.get('refTeacher');
+const when = iso => (iso && !isNaN(Date.parse(iso)) ? new Date(iso).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' }) : null);
+const refWhere = () => [refTeacher && `Teacher ${refTeacher}`, refSource ?? 'Recorded here', when(refCreated) && `recorded ${when(refCreated)}`]
+  .filter(Boolean).map((part, i) => (i ? part.replace(/^./, c => c.toLowerCase()) : part)).join(', ');
+const setRefTeacher = name => { refTeacher = name?.trim() || null; store.set('refTeacher', refTeacher); };
+$('teacherName').value = store.get('teacherName') ?? '';
+$('teacherName').onchange = () => {   // the name this browser's teacher records under; renames a reference recorded here
+  store.set('teacherName', $('teacherName').value.trim());
+  if (refA && refSource === 'Recorded here') setRefTeacher($('teacherName').value);
+  render();
+};
 const last = {};   // latest recording per role, for download
 
 function status(text) { $('status').textContent = text; }
@@ -40,8 +52,16 @@ function status(text) { $('status').textContent = text; }
 // sessions, send to a remote student, or ship with the app as references/<exercise>.json (used when there is no
 // reference of one's own).
 const REF_KIND = 'mugic-gesture-reference';
-$('saveRef').onclick = () => refA && download(`${cfg.name}-reference.json`,
-  { kind: REF_KIND, version: 1, exercise: cfg.name, created: new Date().toISOString(), fullBowDeg: teacherBow, takes: teacher });
+$('saveRef').onclick = () => {
+  if (!refA) return;
+  const saved = new Date().toISOString(), created = refCreated ?? saved;
+  const d = new Date(created), p = n => String(n).padStart(2, '0');
+  const stamp = `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}-${p(d.getHours())}${p(d.getMinutes())}`;   // local time
+  const who = refTeacher ? `-${refTeacher.replace(/[^\p{L}\p{N}]+/gu, '-')}` : '';
+  download(`${cfg.name}-reference${who}-${stamp}.json`,   // e.g. son_file-reference-MARI-2026-10-18-1530.json
+    { kind: REF_KIND, version: 1, exercise: cfg.name, teacher: refTeacher, created, saved, fullBowDeg: teacherBow, takes: teacher });
+  log('reference.save', { teacher: refTeacher, created, saved });
+};
 $('loadRef').onchange = async e => {
   const file = e.target.files[0];
   e.target.value = '';
@@ -58,8 +78,8 @@ function useReference(data, source) {
   log('reference.use', { source, takes: teacher.length, fullBowDeg: teacherBow });
   if (!modePicked) mode = 'student';   // e.g. the built-in reference arrived after the page opened in Teacher
   store.set('teacher', teacher); store.set('teacherBow', teacherBow); store.set('refSource', refSource);
-  refMeta = data.created && !isNaN(Date.parse(data.created)) ? ` · created ${new Date(data.created).toLocaleString()}` : '';
-  store.set('refMeta', refMeta);
+  refCreated = data.created ?? null;
+  store.set('refCreated', refCreated); setRefTeacher(data.teacher);
   status(`reference: ${source.toLowerCase()}`);
   render();
 }
@@ -69,7 +89,7 @@ function showReference() {
   if (!refA) return;
   const n = teacher.length;
   showResults({ strokes: refA.strokes, turns: refA.turns }, 'teacher',
-    `${refSource ?? 'Recorded here'}${refMeta} · ${n} take${n > 1 ? 's' : ''}` +
+    `${refWhere()} · ${n} take${n > 1 ? 's' : ''}` +
     (teacherBow ? ` · full bow ≈ ${teacherBow.toFixed(0)}° of forearm sweep` : ''), '', 'Teacher reference');
 }
 $('viewRef').onclick = showReference;
@@ -195,7 +215,8 @@ function finish(r, note = '') {
       fullBowDeg: Math.round(r.calib.fullBowDeg), conj: r.calib.conj });
     if (who === 'teacher') {
       teacher.push(ex.refPart(a)); refA = ex.pool(teacher); store.set('teacher', teacher);
-      refSource = 'Recorded here'; refMeta = ''; store.set('refSource', refSource); store.set('refMeta', refMeta);
+      refSource = 'Recorded here'; refCreated = new Date().toISOString(); setRefTeacher($('teacherName').value);
+      store.set('refSource', refSource); store.set('refCreated', refCreated);
       showResults(a, who, `Saved to the reference: ${a.strokes.length} strokes. Reference now ${teacher.length} ` +
         `take${teacher.length > 1 ? 's' : ''}, ${refA.strokes.length} strokes.${note}`);
     } else {
@@ -211,11 +232,11 @@ function render() {
   $('saveRef').disabled = $('viewRef').disabled = !refA;
   $('teacherPanel').hidden = mode !== 'teacher';
   $('studentPanel').hidden = mode !== 'student';
-  $('refLine').textContent = refA ? `Scored against the teacher reference (${refSource?.toLowerCase() ?? 'recorded here'}).`
+  $('refLine').textContent = refA ? `Scored against ${refTeacher ? `${refTeacher}'s` : 'the teacher'} reference (${refWhere().replace(/^Teacher [^,]*, /, '').replace(/^./, c => c.toLowerCase())}).`
     : 'No teacher reference yet: pick Teacher to record one, or load one there.';
   $('refInfo').innerHTML = (refA
     ? [`${teacher.length} take${teacher.length > 1 ? 's' : ''}`, 'Several strokes',
-      teacherBow && `Full bow ≈ ${teacherBow.toFixed(0)}° of forearm sweep`, refSource,
+      teacherBow && `Full bow ≈ ${teacherBow.toFixed(0)}° of forearm sweep`, refA && refWhere(),
       newTeacher && 'Replaced by the next teacher take']
     : ['None yet']).filter(Boolean).map(x => `<li>${x}</li>`).join('');
   $('connect').textContent = hub.device ? 'MUGIC connected' : 'Connect MUGIC';
