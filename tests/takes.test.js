@@ -54,3 +54,10 @@ test('flick fires once per acceleration spike, not on bowing', () => {
   }
   assert.deepEqual(hits, [2, 6]);
 });
+
+test('a take longer than the limit is cut and says so', () => {
+  const d = synthBow({ rest: 3 }).devices[0], ends = [];
+  const det = takeDetector({ max_s: 20 }, (e, take, why) => { if (e === 'end') ends.push(why); });
+  d.t.forEach((t, i) => det.feed({ q: d.q[i] }, t));
+  assert.deepEqual(ends, ['limit']);
+});

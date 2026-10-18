@@ -6,7 +6,7 @@ import { DEG, apply, clamp, conj, continuous, cross, mul, normalize, reject, toM
 
 export const config = {
   name: 'son_file', title: 'Son filé', class: 'C', mount: 'bow_forearm',
-  window_s: [2, 40],
+  window_s: [2, 180],       // a take is cut at the maximum
   stroke_s: [8, 0.5],       // target stroke duration and tolerance
   tempo_mandatory: true,    // duration counts in the score
   bow_length_cm: 65,

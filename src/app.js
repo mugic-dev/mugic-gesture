@@ -89,7 +89,7 @@ function turnOff(t) {
 }
 $('power').onclick = () => (state === 'off' || state === 'resting' ? turnOn(now) : turnOff(now));
 
-function onTake(e, take) {
+function onTake(e, take, why) {
   state = e === 'start' ? 'moving' : e === 'cancel' ? state : 'ready';
   if (e === 'ready' && now !== endedAt) beep(880);   // no ready beep right after the take-saved beep
   if (e === 'start') {
@@ -103,7 +103,7 @@ function onTake(e, take) {
       [{ id: device.id, mount: cfg.mount }]);
     if (mic) rec.extra.mic_rms = take.map(r => r.sample.mic);
     for (const r of take) addSample(rec, 0, r.t, r.sample);
-    finish(rec);
+    finish(rec, why === 'limit' ? ` Stopped at the ${cfg.window_s[1] / 60}-minute limit.` : '');
     rec = null;
   }
   render();
@@ -135,7 +135,7 @@ function onSample(s, t) {
 }
 
 // Calibrate, analyze and report a finished (or loaded) take; every take ends with the result card.
-function finish(r) {
+function finish(r, note = '') {
   const who = r.role === 'reference' ? 'teacher' : 'student';
   last[r.role] = r;
   try {
@@ -150,9 +150,9 @@ function finish(r) {
     if (who === 'teacher') {
       teacher.push(ex.refPart(a)); refA = ex.pool(teacher); store.set('teacher', teacher);
       showResults(a, who, `Saved to the reference: ${a.strokes.length} strokes. Reference now ${teacher.length} ` +
-        `take${teacher.length > 1 ? 's' : ''}, ${refA.strokes.length} strokes.`);
+        `take${teacher.length > 1 ? 's' : ''}, ${refA.strokes.length} strokes.${note}`);
     } else {
-      showResults(a, who);
+      showResults(a, who, undefined, note);
     }
   } catch (e) { showResults(null, who, `${cap(who)} take not used: ${e.message}`); }
   render();
@@ -205,7 +205,7 @@ function band(profiles) {
 
 // Result card after every take. Both players: stroke count, average time and speed, evenness and stroke shape.
 // The student also gets the 0-10 score, the measures against the teacher and the overlay on the teacher's shape.
-function showResults(a, who, message) {
+function showResults(a, who, message, note = '') {
   const ok = a?.strokes.length > 0, student = who === 'student';
   $('results').hidden = false;
   $('resultTitle').textContent = `${cap(who)} take`;
@@ -214,7 +214,7 @@ function showResults(a, who, message) {
   $('scoreBox').hidden = !s;
   $('metrics').hidden = !s;
   $('score').textContent = s?.total?.toFixed(1) ?? '–';
-  $('coach').textContent = message ?? (s ? s.coach : ok ? 'Record the teacher first to get a score.' : 'No strokes found.');
+  $('coach').textContent = (message ?? (s ? s.coach : ok ? 'Record the teacher first to get a score.' : 'No strokes found.')) + note;
   if (!ok) return;
   const avg = key => a.strokes.reduce((t, k) => t + k[key], 0) / a.strokes.length;
   $('summary').textContent = `${a.strokes.length} strokes · ${avg('duration').toFixed(1)} s each · ` +

@@ -3,11 +3,12 @@
 // "Held" means the orientation stays within still_deg for hold_s, measured on the quaternion rather than on |ω|
 // so that a very slow bow doesn't count as still. A bow change passes back through the same orientation, so
 // motion slower than 2·still_deg/hold_s (1.5°/s by default) can still look held.
+// A take longer than max_s is cut there (onEvent('end', take, 'limit')).
 // stop(tCut) ends the session (the OFF flick): a take in progress keeps its samples up to tCut, or is cancelled
 // when it has less than min_take_s of motion (it was the flick itself).
 import { DEG, geodesic, normalize } from './quat.js';
 
-export function takeDetector({ still_deg = 1.5, hold_s = 2, preroll_s = 1, max_s = 40, min_take_s = 1 } = {}, onEvent) {
+export function takeDetector({ still_deg = 1.5, hold_s = 2, preroll_s = 1, max_s = 180, min_take_s = 1 } = {}, onEvent) {
   let state = 'waiting', anchor = null, recent = [], take = null, moveT = 0;
   return {
     feed(sample, t) {
@@ -25,7 +26,7 @@ export function takeDetector({ still_deg = 1.5, hold_s = 2, preroll_s = 1, max_s
         take.push({ t, sample });
         if (held || t - take[0].t > max_s) {
           state = held ? 'ready' : 'waiting';
-          onEvent('end', take); take = null;
+          onEvent('end', take, held ? 'still' : 'limit'); take = null;
           if (held) onEvent('ready');
         }
       }
