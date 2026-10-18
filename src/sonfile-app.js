@@ -18,7 +18,7 @@ let mic = null, rec = null, live = null;   // rec: the take being saved
 // Who is playing: teacher takes become the reference, student takes are scored against it right away. There is
 // no calibration step: each take finds its own bow direction, and the teacher's largest stroke is the full bow
 // that the student's bow use and speed are measured against.
-let mode = store.get('mode') ?? 'teacher';
+let mode = 'student';   // the reference is usually built in: Teacher is only for recording one's own
 // The reference pools the teacher takes (strokes and bow changes only) of the latest teacher session: pressing
 // Teacher starts a session, and its first take replaces the previous pool.
 let teacher = store.get('teacher') ?? [], refA = teacher.length ? ex.pool(teacher) : null;
@@ -70,7 +70,8 @@ $('mic').onchange = async e => {
 document.querySelectorAll('[data-save]').forEach(b => { b.onclick = () => last[b.dataset.save] && save(last[b.dataset.save]); });
 document.querySelectorAll('[data-mode]').forEach(b => {
   b.onclick = () => {
-    mode = b.dataset.mode; store.set('mode', mode);
+    mode = b.dataset.mode;
+    if (shownFor !== mode) $('results').hidden = true;   // each role sees only its own result card
     if (mode === 'teacher') newTeacher = true;
     render();
   };
@@ -178,6 +179,10 @@ function finish(r, note = '') {
 function render() {
   document.querySelectorAll('[data-save]').forEach(b => { b.disabled = !last[b.dataset.save]; });
   $('saveRef').disabled = !refA;
+  $('teacherPanel').hidden = mode !== 'teacher';
+  $('studentPanel').hidden = mode !== 'student';
+  $('refLine').textContent = refA ? `Scored against the teacher reference (${refSource?.toLowerCase() ?? 'recorded here'}).`
+    : 'No teacher reference yet: pick Teacher to record one, or load one there.';
   $('refInfo').innerHTML = (refA
     ? [`${teacher.length} take${teacher.length > 1 ? 's' : ''}`, 'Several strokes',
       teacherBow && `Full bow ≈ ${teacherBow.toFixed(0)}° of forearm sweep`, refSource,
@@ -226,7 +231,9 @@ function band(profiles) {
 
 // Result card after every take. Both players: stroke count, average time and speed, evenness and stroke shape.
 // The student also gets the 0-10 score, the measures against the teacher and the overlay on the teacher's shape.
+let shownFor = null;   // whose take the result card shows
 function showResults(a, who, message, note = '') {
+  shownFor = who;
   const ok = a?.strokes.length > 0, student = who === 'student';
   $('results').hidden = false;
   $('resultTitle').textContent = `${cap(who)} take`;

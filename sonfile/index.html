@@ -26,7 +26,7 @@
     <section class="now">
       <p id="prompt"></p>
       <div class="row">
-        <span class="seg"><button data-mode="teacher">Teacher</button><button data-mode="student">Student</button></span>
+        <span class="seg"><button data-mode="student">Student</button><button data-mode="teacher">Teacher</button></span>
         <button id="power">Turn ON</button><b id="state"></b>
       </div>
       <ul class="hint">
@@ -36,21 +36,23 @@
         <li>Hold still again to end the take (low beep).</li>
         <li>Flick again to turn OFF (falling beeps). Flicks are then ignored for at least 10 s, and until the MUGIC
           has been laid down still for 2 s.</li>
-        <li>Teacher takes become the reference; student takes are scored against it.</li>
+        <li>Student takes are scored against the teacher reference. Pick Teacher only to record a reference of your own.</li>
       </ul>
     </section>
 
     <section class="steps">
-      <article>
-        <h2>Reference (teacher)</h2>
+      <article id="teacherPanel">
+        <h2>Teacher reference</h2>
+        <p>Record your own takes to replace the reference, or load one from a file.</p>
         <div class="row"><ul id="refInfo" class="info"></ul>
           <button id="saveRef">Save reference</button>
           <label class="file">Load reference… <input type="file" id="loadRef" accept=".json"></label>
           <button data-save="reference">Download last take</button></div>
       </article>
-      <article>
-        <h2>Attempt (student)</h2>
-        <div class="row"><button data-save="attempt">Download last</button></div>
+      <article id="studentPanel">
+        <h2>Student</h2>
+        <p id="refLine"></p>
+        <div class="row"><button data-save="attempt">Download last take</button></div>
       </article>
     </section>
 
