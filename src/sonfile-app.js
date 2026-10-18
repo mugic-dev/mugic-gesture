@@ -157,8 +157,8 @@ function onTake(e, take, why) {
     live = { q0: null, bow: ex.liveBow(), lastT: null, t: [], speed: [], off: [], tilt: [], theta: 0 };
   }
   if (e === 'cancel') live = null;
-  if (e === 'end') {
-    beep(440);
+  if (e === 'end') {   // one take per ON: the session then rests as after an OFF flick
+    if (why !== 'off') { det = null; state = 'resting'; restUntil = now + rest_s; beep(440, 990, 660); }
     live = null;
     rec = newRecording({ exercise: cfg.name, class: cfg.class, mount: cfg.mount, role: roleOf(mode), performer: mode },
       [{ id: hub.device.id, mount: cfg.mount }]);
@@ -199,9 +199,6 @@ function onSample(s, t) {
 }
 
 // Calibrate, analyze and report a finished (or loaded) take; every take ends with the result card.
-// A take cut by OFF with fewer than MIN_OFF_STROKES strokes is discarded: it is the motion of reaching for the
-// button or flicking, not playing.
-const MIN_OFF_STROKES = 2;
 function finish(r, note = '', why = '') {
   const who = r.role === 'reference' ? 'teacher' : 'student';
   try {
@@ -213,11 +210,6 @@ function finish(r, note = '', why = '') {
       r.calib = { ...c, fullBowDeg: bow ?? c.fullBowDeg };
     }
     const a = ex.analyze(r);
-    if (why === 'off' && a.strokes.length < MIN_OFF_STROKES) {
-      log('take.discarded', { who, strokes: a.strokes.length });
-      showResults(null, who, `Short take discarded (${a.strokes.length} stroke${a.strokes.length === 1 ? '' : 's'}, stopped by OFF).`);
-      return;
-    }
     last[r.role] = r;
     calib = r.calib; store.set('lastCalib', calib);
     if (fresh) { teacher = []; newTeacher = false; }
