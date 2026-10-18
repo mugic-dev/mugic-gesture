@@ -18,11 +18,16 @@ export function addSample(rec, i, now, s) {
   return t;
 }
 
-export function save(rec) {
-  const { t0, ...data } = rec;
+// Hand the viewer a JSON file to save.
+export function download(name, data) {
   const a = document.createElement('a');
   a.href = URL.createObjectURL(new Blob([JSON.stringify(data)], { type: 'application/json' }));
-  a.download = `${rec.exercise}-${rec.role}-${rec.created.replace(/[:.]/g, '-')}.json`;
+  a.download = name;
   a.click();
   URL.revokeObjectURL(a.href);
+}
+
+export function save(rec) {
+  const { t0, ...data } = rec;
+  download(`${rec.exercise}-${rec.role}-${rec.created.replace(/[:.]/g, '-')}.json`, data);
 }

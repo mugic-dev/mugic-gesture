@@ -34,6 +34,14 @@ been still for 2 s, so taking it off and laying it down can't turn it back on. T
 
 Motion slower than 1.5°/s can be mistaken for holding still (see `src/takes.js`).
 
+## Reference files
+
+**Save reference** downloads the teacher's reference (`son_file-reference.json`: the per-stroke measures and
+stroke shapes of the pooled teacher takes, and the teacher's full bow). **Load reference…** replaces the current
+one with such a file, so a teacher trains once and reuses it across students and sessions, or sends it to a
+remote student. A curated file placed at `references/son_file.json` ships with the app and is used whenever the
+browser has no reference of its own, so no teacher training is needed.
+
 ## Photos
 
 Gesture card photos (Unsplash License, placeholders for prototyping): `images/sonfile.jpg` by Denny Müller

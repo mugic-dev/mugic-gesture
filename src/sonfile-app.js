@@ -1,6 +1,6 @@
 import { getHub } from './hub.js';
 import { openMic } from './mic.js';
-import { addSample, newRecording, save } from './recording.js';
+import { addSample, download, newRecording, save } from './recording.js';
 import { DEG, geodesic, normalize } from './quat.js';
 import * as ex from './exercises/sonfile.js';
 import { plot } from './plot.js';
@@ -23,10 +23,41 @@ let mode = store.get('mode') ?? 'teacher';
 // Teacher starts a session, and its first take replaces the previous pool.
 let teacher = store.get('teacher') ?? [], refA = teacher.length ? ex.pool(teacher) : null;
 let teacherBow = store.get('teacherBow'), calib = store.get('lastCalib');   // calib: latest take's, for the live view
-let newTeacher = false;
+let newTeacher = false, refSource = store.get('refSource');   // where the reference came from, for display
 const last = {};   // latest recording per role, for download
 
 function status(text) { $('status').textContent = text; }
+
+// Reference file: the teacher pool (per-stroke measures and shapes) and the teacher's full bow, to reuse across
+// sessions, send to a remote student, or ship with the app as references/<exercise>.json (used when there is no
+// reference of one's own).
+const REF_KIND = 'mugic-gesture-reference';
+$('saveRef').onclick = () => refA && download(`${cfg.name}-reference.json`,
+  { kind: REF_KIND, version: 1, exercise: cfg.name, created: new Date().toISOString(), fullBowDeg: teacherBow, takes: teacher });
+$('loadRef').onchange = async e => {
+  const file = e.target.files[0];
+  e.target.value = '';
+  if (!file) return;
+  try { useReference(JSON.parse(await file.text()), `Loaded from ${file.name}`); } catch (err) { status(`${file.name}: ${err.message}`); }
+};
+
+function useReference(data, source) {
+  if (data.kind !== REF_KIND || data.exercise !== cfg.name || !data.takes?.length) {
+    throw new Error(`not a ${cfg.title} reference file`);
+  }
+  teacher = data.takes; teacherBow = data.fullBowDeg ?? null; refA = ex.pool(teacher); newTeacher = false;
+  refSource = source;
+  store.set('teacher', teacher); store.set('teacherBow', teacherBow); store.set('refSource', refSource);
+  status(`reference: ${source.toLowerCase()}`);
+  render();
+}
+
+if (!teacher.length) {
+  fetch(`../references/${cfg.name}.json`)
+    .then(r => (r.ok ? r.json() : null))
+    .then(d => { if (d && !teacher.length) useReference(d, 'Built into the app'); })
+    .catch(() => {});
+}
 
 $('connect').onclick = () => hub.connect().catch(e => status(e.message));
 
@@ -133,6 +164,7 @@ function finish(r, note = '') {
     const a = ex.analyze(r);
     if (who === 'teacher') {
       teacher.push(ex.refPart(a)); refA = ex.pool(teacher); store.set('teacher', teacher);
+      refSource = 'Recorded here'; store.set('refSource', refSource);
       showResults(a, who, `Saved to the reference: ${a.strokes.length} strokes. Reference now ${teacher.length} ` +
         `take${teacher.length > 1 ? 's' : ''}, ${refA.strokes.length} strokes.${note}`);
     } else {
@@ -145,9 +177,11 @@ function finish(r, note = '') {
 
 function render() {
   document.querySelectorAll('[data-save]').forEach(b => { b.disabled = !last[b.dataset.save]; });
+  $('saveRef').disabled = !refA;
   $('refInfo').innerHTML = (refA
     ? [`${teacher.length} take${teacher.length > 1 ? 's' : ''}`, 'Several strokes',
-      teacherBow && `Full bow ≈ ${teacherBow.toFixed(0)}° of forearm sweep`, newTeacher && 'Replaced by the next teacher take']
+      teacherBow && `Full bow ≈ ${teacherBow.toFixed(0)}° of forearm sweep`, refSource,
+      newTeacher && 'Replaced by the next teacher take']
     : ['None yet']).filter(Boolean).map(x => `<li>${x}</li>`).join('');
   $('connect').textContent = hub.device ? 'MUGIC connected' : 'Connect MUGIC';
   $('connect').classList.toggle('on', !!hub.device);
