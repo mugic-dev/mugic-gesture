@@ -140,17 +140,21 @@ export function analyze(rec, cfg = config) {
   return { t, u, ang, strokes, turns, summary };
 }
 
-// Calibration recording: one slow full down-bow from frog to tip. Fixes the bow axis (positive = down-bow, from
-// the gyro), the forearm sweep of a full bow (turns sweep into bow position and speed into cm/s), and whether the
-// quaternion must be conjugated so that it turns the same way as the gyro (sweep grows toward the tip).
+// Calibration from any take that starts at the frog, so no separate calibration take is needed: the bow axis
+// (from the gyro) signed so that the first stroke is a down-bow; whether the quaternion must be conjugated to be
+// body -> world (the reading under which the first stroke turns about +axis); and the largest stroke's forearm
+// sweep, a lower bound on the full bow (the app keeps the largest seen per player).
 export function calibrate(rec, cfg = config) {
-  const d = rec.devices[0], axis = bowAxis(d.gyro);
-  const { strokes } = analyze({ ...rec, calib: { axis, fullBowDeg: 1 } }, cfg);
-  const fullBowDeg = Math.max(0, ...strokes.map(s => s.extent));
-  if (fullBowDeg < 10) throw new Error('No full bow found in the calibration recording.');
-  const { i0, i1 } = strokes.find(s => s.extent === fullBowDeg);
-  const turn = mul(conj(normalize(d.q[i0])), normalize(d.q[i1]));
-  return { axis, fullBowDeg, conj: vdot(turn.slice(1), axis) * turn[0] < 0 };
+  const d = rec.devices[0];
+  let axis = bowAxis(d.gyro);
+  const first = analyze({ ...rec, calib: { axis, fullBowDeg: 1 } }, cfg).strokes[0];
+  if (!first || first.extent < 5) throw new Error('no bow stroke found: start still at the frog, then bow.');
+  if (first.dir < 0) axis = axis.map(x => -x);
+  const along = q => { const v = q.slice(1), n = Math.hypot(...v) || 1; return Math.sign(q[0]) * vdot(v, axis) / n; };
+  const p0 = normalize(d.q[first.i0]), p1 = normalize(d.q[first.i1]);
+  const calib = { axis, fullBowDeg: 1, conj: along(mul(p0, conj(p1))) > along(mul(conj(p0), p1)) };
+  calib.fullBowDeg = Math.max(...analyze({ ...rec, calib }, cfg).strokes.map(s => s.extent));
+  return calib;
 }
 
 // Teacher strokes kept for the reference (no sample indices), and the pool of several teacher takes.

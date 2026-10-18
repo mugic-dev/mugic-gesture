@@ -14,13 +14,14 @@ const store = {
 };
 
 let device = null, mic = null, rec = null, live = null;   // rec: the take being saved
-// Who is playing: teacher takes become the reference, student takes are scored. Each has its own calibration
-// (arms differ in how far the forearm sweeps over a full bow).
+// Who is playing: teacher takes become the reference, student takes are scored against it right away. There is
+// no calibration step: each take finds its own bow direction, and the teacher's largest stroke is the full bow
+// that the student's bow use and speed are measured against.
 let mode = store.get('mode') ?? 'teacher';
-const calibs = { teacher: store.get('calib.teacher'), student: store.get('calib.student') };
 // The reference pools the teacher takes (strokes and bow changes only) of the latest teacher session: pressing
 // Teacher starts a session, and its first take replaces the previous pool.
-let calib = calibs[mode], teacher = store.get('teacher') ?? [], refA = teacher.length ? ex.pool(teacher) : null;
+let teacher = store.get('teacher') ?? [], refA = teacher.length ? ex.pool(teacher) : null;
+let teacherBow = store.get('teacherBow'), calib = store.get('lastCalib');   // calib: latest take's, for the live view
 let newTeacher = false;
 const last = {};   // latest recording per role, for download
 
@@ -41,10 +42,9 @@ $('mic').onchange = async e => {
 };
 
 document.querySelectorAll('[data-save]').forEach(b => { b.onclick = () => last[b.dataset.save] && save(last[b.dataset.save]); });
-$('recal').onclick = () => { calib = calibs[mode] = null; store.set(`calib.${mode}`, null); render(); };
 document.querySelectorAll('[data-mode]').forEach(b => {
   b.onclick = () => {
-    mode = b.dataset.mode; calib = calibs[mode]; store.set('mode', mode);
+    mode = b.dataset.mode; store.set('mode', mode);
     if (mode === 'teacher') newTeacher = true;
     render();
   };
@@ -57,8 +57,7 @@ $('load').onchange = async e => {
   e.target.value = '';
 };
 
-// What the next take will be used for.
-const nextRole = () => (!calib ? 'calibration' : mode === 'teacher' ? 'reference' : 'attempt');
+const roleOf = who => (who === 'teacher' ? 'reference' : 'attempt');
 
 // Short tones so the player knows the state without looking: high = ready, low = take captured,
 // rising pair = ON, falling pair = OFF.
@@ -98,10 +97,8 @@ function onTake(e, take) {
   if (e === 'end') {
     beep(440);
     live = null;
-    const role = nextRole();
-    rec = newRecording({ exercise: cfg.name, class: cfg.class, mount: cfg.mount, role, performer: mode },
+    rec = newRecording({ exercise: cfg.name, class: cfg.class, mount: cfg.mount, role: roleOf(mode), performer: mode },
       [{ id: device.id, mount: cfg.mount }]);
-    if (role !== 'calibration') rec.calib = calib;
     if (mic) rec.extra.mic_rms = take.map(r => r.sample.mic);
     for (const r of take) addSample(rec, 0, r.t, r.sample);
     finish(rec);
@@ -132,37 +129,39 @@ function onSample(s, t) {
   live.sweep = a.sweep;
 }
 
+// Calibrate, analyze and report a finished (or loaded) take; every take ends with the result card.
 function finish(r) {
+  const who = r.role === 'reference' ? 'teacher' : 'student';
   last[r.role] = r;
   try {
-    if (r.role === 'calibration') {
-      calib = calibs[mode] = ex.calibrate(r); store.set(`calib.${mode}`, calib);
-    } else if (r.role === 'reference') {
-      const a = ex.analyze(r);
-      if (!a.strokes.length) throw new Error('Take ignored: no strokes found.');
-      if (newTeacher) { teacher = []; newTeacher = false; }
-      teacher.push(ex.refPart(a)); refA = ex.pool(teacher); store.set('teacher', teacher);
-    } else {
-      showResults(ex.analyze(r));
+    if (who === 'teacher' && newTeacher) { teacher = []; teacherBow = null; newTeacher = false; }
+    if (!r.calib) {
+      const c = ex.calibrate(r);
+      if (who === 'teacher') { teacherBow = Math.max(c.fullBowDeg, teacherBow ?? 0); store.set('teacherBow', teacherBow); }
+      r.calib = calib = { ...c, fullBowDeg: teacherBow ?? c.fullBowDeg };
+      store.set('lastCalib', calib);
     }
-  } catch (e) { status(e.message); }
+    const a = ex.analyze(r);
+    if (who === 'teacher') {
+      teacher.push(ex.refPart(a)); refA = ex.pool(teacher); store.set('teacher', teacher);
+      showResults(a, who, `Saved to the reference: ${a.strokes.length} strokes. Reference now ${teacher.length} ` +
+        `take${teacher.length > 1 ? 's' : ''}, ${refA.strokes.length} strokes.`);
+    } else {
+      showResults(a, who);
+    }
+  } catch (e) { showResults(null, who, `${cap(who)} take not used: ${e.message}`); }
   render();
 }
 
-const prompts = {
-  calibration: 'calibration: hold the bow still at the frog, then play one slow full down-bow and hold still at the tip.',
-  reference: 'take: hold still at the frog, play sons filés (about 8 s each, as many as you like), then hold still.',
-  attempt: 'Attempt: hold still at the frog, play the same four strokes, then hold still.',
-};
 
 function render() {
   document.querySelectorAll('[data-save]').forEach(b => { b.disabled = !last[b.dataset.save]; });
-  $('calibInfo').textContent = calib ? `${cap(mode)}: full bow = ${calib.fullBowDeg.toFixed(0)}° of forearm sweep` : 'not calibrated';
-  $('refInfo').textContent = (refA ? `${teacher.length} takes, ${refA.strokes.length} strokes` : 'none yet') +
+  $('refInfo').textContent = (refA ? `${teacher.length} take${teacher.length > 1 ? 's' : ''}, ${refA.strokes.length} strokes, full bow ≈ ${teacherBow?.toFixed(0)}° of forearm sweep` : 'none yet') +
     (newTeacher && refA ? ' (replaced by the next teacher take)' : '');
   $('connect').textContent = device ? 'MUGIC connected' : 'Connect MUGIC';
   $('connect').classList.toggle('on', !!device);
-  $('prompt').textContent = !device ? 'Connect the MUGIC to start.' : `${cap(mode)} ${prompts[nextRole()]}`;
+  $('prompt').textContent = !device ? 'Connect the MUGIC to start.'
+    : `${cap(mode)}: start still at the frog, play sons filés (down-bow first, about 8 s each, as many as you like), then hold still.`;
   document.querySelectorAll('[data-mode]').forEach(b => b.classList.toggle('on', b.dataset.mode === mode));
   $('state').textContent = !device ? '' : {
     off: 'OFF: flick to start', arming: 'ON…', resting: 'OFF: take the MUGIC off and lay it flat', waiting: 'ON: hold still…', ready: 'ready: play when you like',
@@ -190,13 +189,29 @@ const span = 10;   // seconds of live trace shown
   requestAnimationFrame(tick);
 })();
 
-function showResults(a) {
-  const out = $('results');
-  out.hidden = false;
-  if (!a.strokes.length) { $('score').textContent = '–'; $('coach').textContent = 'No strokes found.'; return; }
-  const s = refA?.strokes.length ? ex.score(a, refA) : null;
+// Mean and ± one standard deviation of stroke speed profiles.
+function band(profiles) {
+  const n = profiles.length, m = profiles[0].map((_, i) => profiles.reduce((s, p) => s + p[i], 0) / n);
+  const sd = m.map((mi, i) => Math.sqrt(profiles.reduce((s, p) => s + (p[i] - mi) ** 2, 0) / n));
+  return { y: m, band: [m.map((v, i) => v - sd[i]), m.map((v, i) => v + sd[i])] };
+}
+
+// Result card after every take. Both players: stroke count, average time and speed, evenness and stroke shape.
+// The student also gets the 0-10 score, the measures against the teacher and the overlay on the teacher's shape.
+function showResults(a, who, message) {
+  const ok = a?.strokes.length > 0, student = who === 'student';
+  $('results').hidden = false;
+  $('resultTitle').textContent = `${cap(who)} take`;
+  $('details').hidden = !ok;
+  const s = student && ok && refA?.strokes.length ? ex.score(a, refA) : null;
+  $('scoreBox').hidden = !s;
+  $('metrics').hidden = !s;
   $('score').textContent = s?.total?.toFixed(1) ?? '–';
-  $('coach').textContent = s ? s.coach : 'Record the teacher first to get a score.';
+  $('coach').textContent = message ?? (s ? s.coach : ok ? 'Record the teacher first to get a score.' : 'No strokes found.');
+  if (!ok) return;
+  const avg = key => a.strokes.reduce((t, k) => t + k[key], 0) / a.strokes.length;
+  $('summary').textContent = `${a.strokes.length} strokes · ${avg('duration').toFixed(1)} s each · ` +
+    `average speed ${avg('speedCmS').toFixed(1)} cm/s · evenness ${Math.round(100 * (1 - avg('speedCv')))}%`;
   $('metrics').innerHTML = '<tr><th>Measure</th><th>Student</th><th>Teacher</th><th>Score /10</th></tr>' + (s ? s.rows : []).map(r =>
     `<tr class="${r.bad > 2 ? 'bad' : ''}"><td>${r.label}</td><td>${r.value.toFixed(r.digits)}</td>` +
     `<td>${r.ref.toFixed(r.digits)}${r.key === 'duration' ? ` ± ${cfg.stroke_s[1]}` : ''}</td><td>${r.score.toFixed(1)}</td></tr>`).join('');
@@ -205,14 +220,14 @@ function showResults(a) {
     a.strokes.map((k, i) => `<tr><td>${i + 1}</td><td>${k.dir > 0 ? 'down' : 'up'}</td><td>${f(k.duration, 1)}</td>` +
       `<td>${k.bowFrac == null ? '–' : Math.round(k.bowFrac * 100) + '%'}</td><td>${f(k.speedCmS, 1)}</td><td>${f(k.speedCv, 2)}</td>` +
       `<td>${f(k.offPlane, 1)}</td><td>${f(k.tiltStd, 1)}</td><td>${f(k.loudCv, 2)}</td></tr>`).join('');
-  // speed profile on normalized stroke time: reference mean ± std band, attempt strokes on top
-  const series = a.strokes.map(k => ({ y: k.profile, color: '--c2' }));
-  if (refA?.strokes.length) {
-    const p = refA.strokes.map(k => k.profile), m = p[0].map((_, i) => p.reduce((s, r) => s + r[i], 0) / p.length);
-    const sd = m.map((mi, i) => Math.sqrt(p.reduce((s, r) => s + (r[i] - mi) ** 2, 0) / p.length));
-    series.unshift({ y: m, color: '--c1', band: [m.map((v, i) => v - sd[i]), m.map((v, i) => v + sd[i])] });
-  }
-  plot($('profile'), series);
+  // stroke shape: speed over normalized stroke time. Teacher: this take's strokes over their own mean ± spread;
+  // student: the student's strokes over the teacher's (pooled) mean ± spread.
+  const own = a.strokes.map(k => ({ y: k.profile, color: student ? '--c2' : '--c1' }));
+  const ref = student ? refA?.strokes.length && band(refA.strokes.map(k => k.profile)) : band(a.strokes.map(k => k.profile));
+  plot($('profile'), ref ? [{ ...ref, color: '--c1' }, ...own] : own);
+  $('profileTitle').innerHTML = student
+    ? '<span class="k2">Student</span> strokes over the <span class="k1">teacher</span>\'s shape (bow speed over each stroke)'
+    : 'Stroke shape: each stroke\'s bow speed, with the average ± spread';
   plot($('trace'), [{ x: a.t, y: a.ang.map(g => g.off), color: '--c2' }, { x: a.t, y: a.ang.map(g => g.tilt), color: '--c3' }]);
 }
 

@@ -21,10 +21,12 @@ test('tilt wobble and uneven speed are measured where they belong', () => {
   assert.ok(u.speedCv > 0.15 && u.tiltStd < 0.1);
 });
 
-test('calibration finds the full-bow sweep and down-bow direction', () => {
-  const c = calibrate(synthBow({ strokes: 1, axis: [0, 1, 0], along: [0, 0, 1] }));
-  assert.ok(Math.abs(c.fullBowDeg - 60) < 3);
-  assert.ok(c.axis[1] > 0.99);
+test('any take calibrates: full-bow sweep, and the first stroke is the down-bow', () => {
+  for (const strokes of [1, 4]) {
+    const c = calibrate(synthBow({ strokes, axis: [0, 1, 0], along: [0, 0, 1] }));
+    assert.ok(Math.abs(c.fullBowDeg - 60) < 3);
+    assert.ok(c.axis[1] > 0.99, `${strokes} strokes: axis ${c.axis}`);
+  }
 });
 
 test('0-10 scale', () => {
@@ -45,8 +47,9 @@ test('score flags the defect against a pooled clean reference', () => {
 
 test('down-bow sweeps toward the tip whichever way the device quaternion turns', () => {
   for (const flip of [false, true]) {
+    const start = [0.8, 0.3, -0.4, 0.33];   // held at an angle at the frog
     const device = opts => {   // a device whose quaternion is world -> body when flipped
-      const rec = synthBow(opts);
+      const rec = synthBow({ start: start.map(v => v / Math.hypot(...start)), ...opts });
       if (flip) rec.devices[0].q = rec.devices[0].q.map(q => [q[0], -q[1], -q[2], -q[3]]);
       return rec;
     };

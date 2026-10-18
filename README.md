@@ -14,10 +14,16 @@ Web Bluetooth needs Chrome/Edge and a secure origin (`localhost` counts). The MU
 
 ## Hands-free
 
-Pick **Teacher** or **Student** before playing (buttons). Pressing **Teacher** starts a teacher session: its
-first take replaces the reference pool and later takes add to it (any number of takes and strokes); student takes are scored against the pool,
-0-10 overall and per measure: `10 / (1 + (z/3)²)`, z = how many teacher spreads worse than the teacher. Each has its own calibration: the first take of a role
-without one is that player's calibration (one slow full down-bow, frog to tip).
+Pick **Teacher** or **Student** (buttons). There is no calibration step: the teacher is the calibration. Each
+take finds its own bow direction from its motion (the first stroke is a down-bow: start at the frog), and the
+teacher's largest stroke is the full bow that bow use and speed (cm/s) are measured against, for both players.
+Pressing **Teacher** starts a teacher session: its first take replaces the reference pool and later takes add
+to it. A student take is scored against the pool right away: 0-10 overall and per measure,
+`10 / (1 + (z/3)²)`, z = how many teacher spreads worse than the teacher.
+
+Every take ends with a result card: stroke count, average stroke time and speed, evenness, and the stroke shape
+(speed over each stroke, with the average ± spread). A student card adds the score, the measures against the
+teacher and the student's strokes overlaid on the teacher's shape.
 
 After Connect the app is OFF and ignores motion (scrolling, adjusting). A flick (acceleration spike) turns it
 ON (rising beeps; 1 s to settle). While ON, holding still (orientation within 1.5° for 2 s) gets ready (high

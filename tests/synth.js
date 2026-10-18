@@ -2,9 +2,9 @@
 // and uneven bow speed. Returns a recording like the app's.
 import { DEG, apply, fromAxisAngle, mul, toMatrix, transpose } from '../src/quat.js';
 
-// calib is what a calibration would give for this mount.
+// start is the device's orientation at the frog (body -> world); calib is what a calibration would give.
 export function synthBow({ strokes = 4, strokeS = 8, angle = 60, rate = 50, rest = 1, ramp = 0.3,
-  wobble = 0, uneven = 0, axis = [0, 0, 1], along = [1, 0, 0] } = {}) {
+  wobble = 0, uneven = 0, axis = [0, 0, 1], along = [1, 0, 0], start = [1, 0, 0, 0] } = {}) {
   const dt = 1 / rate, total = rest + strokes * strokeS + rest;
   const d = { id: 'synth', mount: 'bow_forearm', t: [], q: [], gyro: [], accel: [] };
   const vmax = angle / (strokeS - ramp);
@@ -19,7 +19,7 @@ export function synthBow({ strokes = 4, strokeS = 8, angle = 60, rate = 50, rest
     const tilt = wobble * Math.sin(2 * Math.PI * 0.5 * t), tiltRate = wobble * 2 * Math.PI * 0.5 * Math.cos(2 * Math.PI * 0.5 * t);
     const qt = fromAxisAngle(along, tilt / DEG);
     const w = apply(transpose(toMatrix(qt)), axis.map(a => a * v)).map((x, j) => x + along[j] * tiltRate);
-    d.t.push(t); d.q.push(mul(fromAxisAngle(axis, theta / DEG), qt)); d.gyro.push(w); d.accel.push([0, 0, 0]);
+    d.t.push(t); d.q.push(mul(start, mul(fromAxisAngle(axis, theta / DEG), qt))); d.gyro.push(w); d.accel.push([0, 0, 0]);
     theta += v * dt;
   }
   return { exercise: 'son_file', role: 'reference', devices: [d], extra: {}, calib: { axis, fullBowDeg: angle } };
