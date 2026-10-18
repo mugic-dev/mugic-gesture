@@ -1,7 +1,8 @@
 // Takes within an ON session: holding a pose arms the detector ("ready"); moving starts a take, which includes
 // preroll_s of the hold before the motion; holding a pose again ends it. The next take needs a fresh hold of
 // hold_s after that (its own "ready"), so moving away right after a take (e.g. to the mouse) doesn't start one.
-// "Held" means the orientation stays within still_deg for hold_s, measured on the quaternion rather than on |ω|
+// "Held" means the orientation stays within still_deg for hold_s (start_deg, looser, for the hold that gets
+// ready: holding a bow on the string still sways the forearm by a few degrees), measured on the quaternion rather than on |ω|
 // so that a very slow bow doesn't count as still. A bow change passes back through the same orientation, so
 // motion slower than 2·still_deg/hold_s (1.5°/s by default) can still look held.
 // The hold that ends a take lasts end_hold_s (default hold_s): longer for slow bows, which slow down a lot at a
@@ -11,12 +12,12 @@
 // when it has less than min_take_s of motion (it was the flick itself).
 import { DEG, geodesic, normalize } from './quat.js';
 
-export function takeDetector({ still_deg = 1.5, hold_s = 2, end_hold_s = hold_s, preroll_s = 1, max_s = 180, min_take_s = 1 } = {}, onEvent) {
+export function takeDetector({ still_deg = 1.5, start_deg = 4, hold_s = 2, end_hold_s = hold_s, preroll_s = 1, max_s = 180, min_take_s = 1 } = {}, onEvent) {
   let state = 'waiting', anchor = null, recent = [], take = null, moveT = 0;
   return {
     feed(sample, t) {
       const q = normalize(sample.q);
-      if (!anchor || geodesic(q, anchor.q) * DEG > still_deg) anchor = { q, t };
+      if (!anchor || geodesic(q, anchor.q) * DEG > (state === 'waiting' ? start_deg : still_deg)) anchor = { q, t };
       const held = t - anchor.t >= (state === 'moving' ? end_hold_s : hold_s);
       recent.push({ t, sample });
       recent = recent.filter(r => t - r.t <= preroll_s);

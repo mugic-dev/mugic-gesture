@@ -162,6 +162,10 @@ const beep = (...freqs) => hub.beep(...freqs);
 // 'resting' (flicks ignored while the player takes the device off and lays it down: at least rest_s, and until
 // it has been still for still_s) -> 'off'.
 const settle_s = 1, flickCut_s = 0.4, rest_s = 10, still_s = 2, still_deg = 1.5;
+// Playing while ON but before the ready beep records nothing: after warn_s of motion, a low double beep every
+// warn_s and a banner say so (motion = orientation leaving a sway_deg cone within the last second).
+const warn_s = 3, sway_deg = 4;
+let sway = null, movingSince = null, lastWarn = -Infinity, warning = false;
 let state = 'off', det = null, armAt = 0, restUntil = 0, now = 0;
 let calm = null;   // { q, t }: orientation and time since which the device has been still
 const flick = flickDetector();
@@ -218,6 +222,11 @@ function onSample(s, t) {
     log('session.pace', { strokeS: ex.tempo(refA, cfg, refTarget).s, reversalDps: +p.reversal_dps.toFixed(2), endHoldS: p.end_hold_s, maxS: p.window_s[1] });
     state = 'waiting'; det = takeDetector({ max_s: p.window_s[1], end_hold_s: p.end_hold_s }, onTake); render();
   }
+  if (!sway || geodesic(q, sway.q) * DEG > sway_deg) sway = { q, t };
+  const nowWarning = state === 'waiting' && (t - sway.t < 1 ? (movingSince ??= t) : (movingSince = null)) != null
+    && t - movingSince >= warn_s;
+  if (nowWarning && t - lastWarn >= warn_s) { lastWarn = t; beep(330, 330); if (!warning) log('take.not-recording'); }
+  if (nowWarning !== warning) { warning = nowWarning; render(); }
   if (!det) return;
   det.feed(s, t);
   if (!live) return;
@@ -301,7 +310,8 @@ function render() {
     off: 'OFF: flick to start', arming: 'ON…', resting: 'OFF: take the MUGIC off and lay it down', waiting: 'ON: hold still…', ready: 'ready: play when you like',
     moving: '● recording',
   }[state];
-  $('state').className = state;
+  $('state').className = warning ? 'warn' : state;
+  if (warning) $('state').textContent = 'NOT RECORDING: hold still 2 s, then play';
   $('power').textContent = state === 'off' || state === 'resting' ? 'Turn ON' : 'Turn OFF';
   $('power').disabled = !hub.device;
   $('live').hidden = !live;

@@ -48,6 +48,20 @@ test('a one-minute bow is not cut at its bow changes when the end hold follows t
   assert.ok(takes[0].at(-1).t - takes[0][0].t > 180, `take ${takes[0].at(-1).t - takes[0][0].t} s`);
 });
 
+test('a hold with a few degrees of sway gets ready within the hold time', () => {
+  const q0 = synthBow().devices[0].q[0], events = [];
+  let readyAt = null;
+  const det = takeDetector({}, e => { events.push(e); readyAt ??= t; });
+  let t = 0;
+  for (; t < 4 && !events.length; t += 0.02) {
+    const a = 2.5 * Math.PI / 180 * Math.sin(2 * Math.PI * 0.7 * t) / 2;   // ±2.5° sway
+    const q = [Math.cos(a), 0, 0, Math.sin(a)];
+    det.feed({ q: [q[0] * q0[0] - q[3] * q0[3], q[0] * q0[1] - q[3] * q0[2], q[0] * q0[2] + q[3] * q0[1], q[0] * q0[3] + q[3] * q0[0]] }, t);
+  }
+  assert.deepEqual(events, ['ready']);
+  assert.ok(readyAt < 2.2, `ready at ${readyAt}`);
+});
+
 test('no take without a held pose first', () => {
   assert.deepEqual(run(synthBow({ rest: 1 })).events, []);
 });

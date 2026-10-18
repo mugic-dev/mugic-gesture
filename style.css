@@ -75,6 +75,7 @@ ul.info { flex-basis: 100%; }
 #state { color: var(--muted); font-weight: 500; }
 #state.ready { color: var(--on); }
 #state.moving { color: var(--coral); }
+#state.warn { color: #fff; background: var(--red); padding: 2px 10px; border-radius: 6px; }
 .now .row { margin-bottom: 8px; }
 .seg { display: inline-flex; }
 .seg button { border-radius: 0; }
