@@ -51,6 +51,7 @@ const tempoText = () => { const { s, tol } = ex.tempo(refA, cfg, refTarget); ret
 const pace = () => ex.paced(ex.tempo(refA, cfg, refTarget).s, teacherBow ?? 60);
 const setTarget = v => { refTarget = v; store.set('refTarget', v); log('reference.target', v); render(); };
 $('target').oninput = () => setTarget(+$('target').value);
+$('targetNum').onchange = () => { const v = +$('targetNum').value; if (v >= 2 && v <= 60) setTarget(v); else render(); };
 $('targetAuto').onclick = () => setTarget(null);
 const last = {};   // latest recording per role, for download
 
@@ -249,7 +250,8 @@ function render() {
   $('studentPanel').hidden = mode !== 'student';
   const tp = ex.tempo(refA, cfg, refTarget);
   if (document.activeElement !== $('target')) $('target').value = tp.s;
-  $('targetText').textContent = `${tp.s.toFixed(1)} s ${tp.set ? '(set)' : refA ? '(measured average)' : '(default)'}`;
+  if (document.activeElement !== $('targetNum')) $('targetNum').value = tp.s.toFixed(1);
+  $('targetText').textContent = tp.set ? '(set)' : refA ? '(measured average)' : '(default)';
   $('targetAuto').disabled = !tp.set;
   $('tempo').textContent = refA ? `Target: ${tempoText()} per stroke${refTeacher ? ` (${refTeacher}'s tempo)` : ' (the teacher\'s tempo)'}.` : '';
   $('refLine').textContent = refA ? `Scored against ${refTeacher ? `${refTeacher}'s` : 'the teacher'} reference (${refWhere().replace(/^Teacher [^,]*, /, '').replace(/^./, c => c.toLowerCase())}).`
