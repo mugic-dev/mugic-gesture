@@ -3,7 +3,8 @@
 // page opened on its own gets a hub of its own and connects by itself. Beeps are played by the hub's page, whose
 // audio is unlocked by the Connect click.
 // The hub also keeps the diagnostic log shared by all its pages: the last LOG_MAX entries, kept across reloads
-// (localStorage) and echoed to the console; downloadLog() saves it as a file to send for debugging.
+// (localStorage) and echoed to the console; downloadLog() saves it as a file to send for debugging, clearLog()
+// empties it.
 import { connect } from './device.js';
 import { download } from './recording.js';
 
@@ -44,6 +45,11 @@ function createHub() {
   return {
     get device() { return device; },
     log,
+    clearLog() {
+      entries = [];
+      try { localStorage.removeItem(LOG_KEY); } catch (e) {}
+      log('log.cleared');
+    },
     downloadLog() { download(`mugic-gesture-log-${new Date().toISOString().replace(/[:.]/g, '-')}.json`, entries); },
     // s: { sample(sample, seconds), status() }; returns the unsubscribe function
     subscribe(s) { subs.add(s); s.status?.(); return () => subs.delete(s); },

@@ -21,6 +21,7 @@ if (framed) {   // the menu's hub only sees its own page's errors
 }
 log('page.open', { framed });
 $('downloadLog').onclick = () => hub.downloadLog();
+$('clearLog').onclick = () => { hub.clearLog(); status('log cleared'); };
 let mic = null, rec = null, live = null;   // rec: the take being saved
 // Who is playing: teacher takes become the reference, student takes are scored against it right away. There is
 // no calibration step: each take finds its own bow direction, and the teacher's largest stroke is the full bow
