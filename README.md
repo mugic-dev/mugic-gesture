@@ -4,6 +4,42 @@ Learn a gesture from a few reference performances with a MUGIC IMU, then score n
 diagnose defects and give visual feedback. Standalone app (not part of mugic-arcade).
 See [SPEC.md](SPEC.md) for the design.
 
+## Run
+
+    npm start        # python3 -m http.server 8000, then open http://localhost:8000 in Chrome or Edge
+    npm test         # node --test (Node 20+), no dependencies
+
+Web Bluetooth needs Chrome/Edge and a secure origin (`localhost` counts). The MUGIC must be in BLE output mode
+(firmware >= 2.2.0).
+
+## Hands-free
+
+After Connect, nothing is pressed while playing. Holding still (orientation within 1.5° for 2 s) gets ready
+(high beep); moving starts a take; holding still again ends it (low beep). The first take is the calibration
+(one slow full down-bow, frog to tip), the next becomes the reference, later ones are scored attempts. Motion
+slower than 1.5°/s can be mistaken for holding still (see `src/takes.js`).
+
+## Layout
+
+- `src/quat.js` quaternion / R(q) / yaw-only reset / gravity check (SPEC §3)
+- `src/osc.js`, `src/device.js` OSC parsing and Web Bluetooth connection (one call per MUGIC)
+- `src/takes.js` hands-free take detector
+- `src/recording.js` recording file (SPEC §10, one entry per device with its own timestamps)
+- `src/exercises/sonfile.js` son filé (class C): analysis, calibration, scoring
+- `src/app.js`, `src/plot.js`, `index.html`, `style.css` UI
+
+## Exercises
+
+| Exercise | Class | MUGICs | Status |
+|---|---|---|---|
+| Son filé (forearm) | C | 1 | first version |
+| Left-hand shift (back of left hand) | A | 1 | next |
+| Bow change (right hand + forearm) | A/D | 2 | after two-device support |
+| Shift who-led (left hand + forearm) | A | 2 | after two-device support |
+
+Open on the device: which MUGIC axis lies along the forearm when strapped (`forearm_axis` in
+`src/exercises/sonfile.js`, guessed as x). It sets which motion counts as tilt and which as off-plane.
+
 ## Device facts (firmware 2.2.x, verified against mugic-firmware)
 
 - BNO055 in NDOF fusion mode (magnetometer on: yaw is absolute but unreliable indoors; use relative yaw).

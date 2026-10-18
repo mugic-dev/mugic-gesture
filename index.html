@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>MUGIC Gesture</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header>
+    <h1>MUGIC Gesture <small>Son filé</small></h1>
+    <div class="bar">
+      <button id="connect">Connect MUGIC</button>
+      <label><input type="checkbox" id="mic"> Microphone (loudness)</label>
+      <label class="file">Load recording… <input type="file" id="load" accept=".json"></label>
+      <span id="status">not connected</span>
+    </div>
+  </header>
+
+  <main>
+    <section class="now">
+      <p id="prompt"></p>
+      <b id="state"></b>
+      <p class="hint">Strap the MUGIC on the bow-arm forearm, just above the wrist. No buttons while playing:
+        holding still for 2 s gets ready (high beep), moving starts a take, holding still again ends it (low beep).</p>
+    </section>
+
+    <section class="steps">
+      <article>
+        <h2>Calibration</h2>
+        <div class="row"><span id="calibInfo"></span><button id="recal">Recalibrate</button>
+          <button data-save="calibration">Download</button></div>
+      </article>
+      <article>
+        <h2>Reference</h2>
+        <div class="row"><span id="refInfo"></span><label><input type="checkbox" id="asRef"> next take is the reference</label>
+          <button data-save="reference">Download</button></div>
+      </article>
+      <article>
+        <h2>Attempt</h2>
+        <div class="row"><button data-save="attempt">Download last</button></div>
+      </article>
+    </section>
+
+    <section id="live" hidden>
+      <h2>Recording <span id="elapsed"></span></h2>
+      <div class="bow"><span>frog</span><div class="track"><i id="bowPos"></i></div><span>tip</span></div>
+      <h3>Bow speed (°/s, + = down-bow)</h3>
+      <canvas id="liveSpeed"></canvas>
+      <h3><span class="k2">Off-plane</span> and <span class="k3">tilt</span> (°)</h3>
+      <canvas id="liveAngles"></canvas>
+    </section>
+
+    <section id="results" hidden>
+      <div class="score"><b id="score">–</b><p id="coach"></p></div>
+      <table id="metrics"></table>
+      <h3><span class="k1">Reference</span> vs <span class="k2">your</span> bow speed over each stroke</h3>
+      <canvas id="profile"></canvas>
+      <h3><span class="k2">Off-plane</span> and <span class="k3">tilt</span> over the recording (°)</h3>
+      <canvas id="trace"></canvas>
+      <table id="strokes"></table>
+    </section>
+  </main>
+  <script type="module" src="src/app.js"></script>
+</body>
+</html>
