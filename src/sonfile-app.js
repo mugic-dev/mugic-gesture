@@ -161,7 +161,7 @@ const beep = (...freqs) => hub.beep(...freqs);
 // Session: 'off' (motion ignored) -> flick -> 'arming' (settle_s) -> 'waiting' / 'ready' / 'moving' -> flick ->
 // 'resting' (flicks ignored while the player takes the device off and lays it down: at least rest_s, and until
 // it has been still for still_s) -> 'off'.
-const settle_s = 1, flickCut_s = 0.4, rest_s = 10, still_s = 2, still_deg = 1.5;
+const settle_s = 1, flickCut_s = 0.4, rest_s = 3, still_s = 2, still_deg = 1.5;
 let state = 'off', det = null, armAt = 0, restUntil = 0, now = 0;
 let calm = null;   // { q, t }: orientation and time since which the device has been still
 const flick = flickDetector();
