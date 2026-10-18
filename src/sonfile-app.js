@@ -18,10 +18,11 @@ let mic = null, rec = null, live = null;   // rec: the take being saved
 // Who is playing: teacher takes become the reference, student takes are scored against it right away. There is
 // no calibration step: each take finds its own bow direction, and the teacher's largest stroke is the full bow
 // that the student's bow use and speed are measured against.
-let mode = 'student';   // the reference is usually built in: Teacher is only for recording one's own
+let mode = 'student', modePicked = false;   // starts in Teacher only while there is no reference at all
 // The reference pools the teacher takes (strokes and bow changes only) of the latest teacher session: pressing
 // Teacher starts a session, and its first take replaces the previous pool.
 let teacher = store.get('teacher') ?? [], refA = teacher.length ? ex.pool(teacher) : null;
+if (!refA) mode = 'teacher';
 let teacherBow = store.get('teacherBow'), calib = store.get('lastCalib');   // calib: latest take's, for the live view
 let newTeacher = false, refSource = store.get('refSource');   // where the reference came from, for display
 const last = {};   // latest recording per role, for download
@@ -47,6 +48,7 @@ function useReference(data, source) {
   }
   teacher = data.takes; teacherBow = data.fullBowDeg ?? null; refA = ex.pool(teacher); newTeacher = false;
   refSource = source;
+  if (!modePicked) mode = 'student';   // e.g. the built-in reference arrived after the page opened in Teacher
   store.set('teacher', teacher); store.set('teacherBow', teacherBow); store.set('refSource', refSource);
   status(`reference: ${source.toLowerCase()}`);
   render();
@@ -70,7 +72,7 @@ $('mic').onchange = async e => {
 document.querySelectorAll('[data-save]').forEach(b => { b.onclick = () => last[b.dataset.save] && save(last[b.dataset.save]); });
 document.querySelectorAll('[data-mode]').forEach(b => {
   b.onclick = () => {
-    mode = b.dataset.mode;
+    mode = b.dataset.mode; modePicked = true;
     if (shownFor !== mode) $('results').hidden = true;   // each role sees only its own result card
     if (mode === 'teacher') newTeacher = true;
     render();

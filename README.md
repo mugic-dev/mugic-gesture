@@ -14,7 +14,8 @@ Web Bluetooth needs Chrome/Edge and a secure origin (`localhost` counts). The MU
 
 ## Hands-free
 
-The page opens in **Student** mode, scored against the teacher reference (normally built into the app); pick
+The page opens in **Student** mode, scored against the teacher reference (normally built into the app), or in
+**Teacher** while there is no reference at all; pick
 **Teacher** only to record or load a reference of your own. Each mode shows only its own panel and results. There is no calibration step: the teacher is the calibration. Each
 take finds its own bow direction from its motion (the first stroke is a down-bow: start at the frog), and the
 teacher's largest stroke is the full bow that bow use and speed (cm/s) are measured against, for both players.
