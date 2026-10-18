@@ -145,8 +145,10 @@ function finish(r, note = '') {
 
 function render() {
   document.querySelectorAll('[data-save]').forEach(b => { b.disabled = !last[b.dataset.save]; });
-  $('refInfo').textContent = (refA ? `${teacher.length} take${teacher.length > 1 ? 's' : ''}, ${refA.strokes.length} strokes${teacherBow ? `, full bow ≈ ${teacherBow.toFixed(0)}° of forearm sweep` : ''}` : 'none yet') +
-    (newTeacher && refA ? ' (replaced by the next teacher take)' : '');
+  $('refInfo').innerHTML = (refA
+    ? [`${teacher.length} take${teacher.length > 1 ? 's' : ''}`, `${refA.strokes.length} strokes`,
+      teacherBow && `Full bow ≈ ${teacherBow.toFixed(0)}° of forearm sweep`, newTeacher && 'Replaced by the next teacher take']
+    : ['None yet']).filter(Boolean).map(x => `<li>${x}</li>`).join('');
   $('connect').textContent = hub.device ? 'MUGIC connected' : 'Connect MUGIC';
   $('connect').classList.toggle('on', !!hub.device);
   $('connect').hidden = framed && !!hub.device;   // the menu's Connect is behind this frame
