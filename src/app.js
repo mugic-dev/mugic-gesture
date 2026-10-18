@@ -134,7 +134,7 @@ const span = 10;   // seconds of live trace shown
     plot($('liveAngles'), [{ x, y: live.off.slice(i), color: '--c2' }, { x, y: live.tilt.slice(i), color: '--c3' }],
       { xmin: t1 - span, xmax: t1, ymin: -10, ymax: 10 });
     const pos = calib ? Math.min(1, Math.max(0, live.sweep / calib.fullBowDeg)) : 0;
-    $('bowPos').style.left = `${pos * 100}%`;
+    $('bowPos').style.left = `${(1 - pos) * 100}%`;   // tip on the left, frog on the right
   }
   requestAnimationFrame(tick);
 })();
