@@ -137,7 +137,7 @@ const beep = (...freqs) => hub.beep(...freqs);
 // 'resting' (flicks ignored while the player takes the device off and lays it down: at least rest_s, and until
 // it has been still for still_s) -> 'off'.
 const settle_s = 1, flickCut_s = 0.4, rest_s = 10, still_s = 2, still_deg = 1.5;
-let state = 'off', det = null, armAt = 0, restUntil = 0, now = 0, endedAt = -1;
+let state = 'off', det = null, armAt = 0, restUntil = 0, now = 0;
 let calm = null;   // { q, t }: orientation and time since which the device has been still
 const flick = flickDetector();
 
@@ -151,20 +151,20 @@ $('power').onclick = () => (state === 'off' || state === 'resting' ? turnOn(now,
 
 function onTake(e, take, why) {
   log(`take.${e}`, take ? { why, samples: take.length, seconds: +(take.at(-1).t - take[0].t).toFixed(1), mode } : { mode });
-  state = e === 'start' ? 'moving' : e === 'cancel' ? state : 'ready';
-  if (e === 'ready' && now !== endedAt) beep(880);   // no ready beep right after the take-saved beep
+  state = e === 'start' ? 'moving' : e === 'ready' ? 'ready' : e === 'end' ? 'waiting' : state;
+  if (e === 'ready') beep(880);
   if (e === 'start') {
     live = { q0: null, bow: ex.liveBow(), lastT: null, t: [], speed: [], off: [], tilt: [], theta: 0 };
   }
   if (e === 'cancel') live = null;
   if (e === 'end') {
-    beep(440); endedAt = now;
+    beep(440);
     live = null;
     rec = newRecording({ exercise: cfg.name, class: cfg.class, mount: cfg.mount, role: roleOf(mode), performer: mode },
       [{ id: hub.device.id, mount: cfg.mount }]);
     if (mic) rec.extra.mic_rms = take.map(r => r.sample.mic);
     for (const r of take) addSample(rec, 0, r.t, r.sample);
-    finish(rec, why === 'limit' ? ` Stopped at the ${cfg.window_s[1] / 60}-minute limit.` : '');
+    finish(rec, why === 'limit' ? ` Stopped at the ${cfg.window_s[1] / 60}-minute limit.` : '', why);
     rec = null;
   }
   render();
@@ -199,18 +199,29 @@ function onSample(s, t) {
 }
 
 // Calibrate, analyze and report a finished (or loaded) take; every take ends with the result card.
-function finish(r, note = '') {
+// A take cut by OFF with fewer than MIN_OFF_STROKES strokes is discarded: it is the motion of reaching for the
+// button or flicking, not playing.
+const MIN_OFF_STROKES = 2;
+function finish(r, note = '', why = '') {
   const who = r.role === 'reference' ? 'teacher' : 'student';
-  last[r.role] = r;
   try {
-    if (who === 'teacher' && newTeacher) { teacher = []; teacherBow = null; newTeacher = false; }
+    const fresh = who === 'teacher' && newTeacher;   // first take of a teacher session replaces the reference
+    let bow = fresh ? null : teacherBow;
     if (!r.calib) {
       const c = ex.calibrate(r);
-      if (who === 'teacher') { teacherBow = Math.max(c.fullBowDeg, teacherBow ?? 0); store.set('teacherBow', teacherBow); }
-      r.calib = calib = { ...c, fullBowDeg: teacherBow ?? c.fullBowDeg };
-      store.set('lastCalib', calib);
+      if (who === 'teacher') bow = Math.max(c.fullBowDeg, bow ?? 0);
+      r.calib = { ...c, fullBowDeg: bow ?? c.fullBowDeg };
     }
     const a = ex.analyze(r);
+    if (why === 'off' && a.strokes.length < MIN_OFF_STROKES) {
+      log('take.discarded', { who, strokes: a.strokes.length });
+      showResults(null, who, `Short take discarded (${a.strokes.length} stroke${a.strokes.length === 1 ? '' : 's'}, stopped by OFF).`);
+      return;
+    }
+    last[r.role] = r;
+    calib = r.calib; store.set('lastCalib', calib);
+    if (fresh) { teacher = []; newTeacher = false; }
+    if (who === 'teacher') { teacherBow = bow; store.set('teacherBow', teacherBow); }
     log('take.analyzed', { who, strokes: a.strokes.length, durations: a.strokes.map(k => +k.duration.toFixed(1)),
       fullBowDeg: Math.round(r.calib.fullBowDeg), conj: r.calib.conj });
     if (who === 'teacher') {

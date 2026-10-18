@@ -16,7 +16,7 @@ function run(rec, stopAt = Infinity) {
 
 test('hold, play, hold makes exactly one take covering the strokes', () => {
   const { events, takes } = run(synthBow({ rest: 3 }));
-  assert.deepEqual(events, ['ready', 'start', 'end', 'ready']);
+  assert.deepEqual(events, ['ready', 'start', 'end']);
   const t = takes[0].map(s => s.t);
   assert.ok(t[0] < 3 && t[0] > 2, `starts ${t[0]}`);
   assert.ok(t[t.length - 1] > 35, `ends ${t[t.length - 1]}`);
@@ -27,6 +27,16 @@ test('hold, play, hold makes exactly one take covering the strokes', () => {
 
 test('a very slow bow is not mistaken for a held pose', () => {
   const { events } = run(synthBow({ rest: 3, strokes: 2, strokeS: 20, angle: 50 }));
+  assert.deepEqual(events, ['ready', 'start', 'end']);
+});
+
+test('moving right after a take does not start another: the next take needs a fresh hold', () => {
+  const d = synthBow({ rest: 3 }).devices[0], events = [];
+  const det = takeDetector({}, e => events.push(e));
+  d.t.forEach((t, i) => det.feed({ q: d.q[i] }, t));
+  const end = d.t.at(-1), q = d.q.at(-1), turned = [q[0], q[1] + 0.2, q[2], q[3]];
+  for (let i = 1; i <= 50; ++i) det.feed({ q: i < 10 ? q : turned }, end + i / 50);           // reach for the mouse
+  for (let i = 1; i <= 150; ++i) det.feed({ q: turned }, end + 1 + i / 50);                  // then hold still
   assert.deepEqual(events, ['ready', 'start', 'end', 'ready']);
 });
 
