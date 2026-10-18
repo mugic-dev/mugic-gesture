@@ -19,8 +19,8 @@ The page opens in **Student** mode, scored against the teacher reference (normal
 **Teacher** only to record or load a reference of your own. Each mode shows only its own panel and results. There is no calibration step: the teacher is the calibration. Each
 take finds its own bow direction from its motion (the first stroke is a down-bow: start at the frog), and the
 teacher's largest stroke is the full bow that bow use and speed (cm/s) are measured against, for both players.
-Pressing **Teacher** starts a teacher session: its first take replaces the reference pool and later takes add
-to it. A student take is scored against the pool right away: 0-10 overall and per measure,
+Every teacher take is added to the reference pool; **Clear reference** (teacher panel) empties it to start a new
+one. A student take is scored against the pool right away: 0-10 overall and per measure,
 `10 / (1 + (z/3)²)`, z = how many teacher spreads worse than the teacher.
 
 Every take ends with a result card: stroke count, average stroke time and speed, evenness, and the stroke shape

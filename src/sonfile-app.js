@@ -33,7 +33,7 @@ if (!refA) mode = 'teacher';
 let teacherBow = store.get('teacherBow'), calib = store.get('lastCalib');   // calib: latest take's, for the live view
 // The reference's stamp: the teacher's name, where it came from and when it was recorded (its latest teacher take),
 // for display and the file.
-let newTeacher = false, refSource = store.get('refSource'), refCreated = store.get('refCreated'), refTeacher = store.get('refTeacher');
+let refSource = store.get('refSource'), refCreated = store.get('refCreated'), refTeacher = store.get('refTeacher');
 const when = iso => (iso && !isNaN(Date.parse(iso)) ? new Date(iso).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' }) : null);
 const refWhere = () => [refTeacher && `Teacher ${refTeacher}`, refSource ?? 'Recorded here', when(refCreated) && `recorded ${when(refCreated)}`]
   .filter(Boolean).map((part, i) => (i ? part.replace(/^./, c => c.toLowerCase()) : part)).join(', ');
@@ -84,7 +84,7 @@ function useReference(data, source) {
   if (data.kind !== REF_KIND || data.exercise !== cfg.name || !data.takes?.length) {
     throw new Error(`not a ${cfg.title} reference file`);
   }
-  teacher = data.takes; teacherBow = data.fullBowDeg ?? null; refA = ex.pool(teacher); newTeacher = false;
+  teacher = data.takes; teacherBow = data.fullBowDeg ?? null; refA = ex.pool(teacher);
   refSource = source;
   log('reference.use', { source, takes: teacher.length, fullBowDeg: teacherBow });
   if (!modePicked) { mode = 'student'; $('tickTarget').checked = false; }   // e.g. the built-in reference arrived after the page opened in Teacher
@@ -105,6 +105,18 @@ function showReference() {
     (teacherBow ? ` · full bow ≈ ${teacherBow.toFixed(0)}° of forearm sweep` : ''), '', 'Teacher reference');
 }
 $('viewRef').onclick = showReference;
+
+// Teacher takes always add to the reference; Clear reference is how a new one is started.
+$('clearRef').onclick = () => {
+  if (!refA || !confirm(`Clear ${refTeacher ? `${refTeacher}'s` : 'the'} reference (${teacher.length} take${teacher.length > 1 ? 's' : ''})? ` +
+    'Save it first to keep it. The next teacher take starts a new reference.')) return;
+  log('reference.clear', { takes: teacher.length, teacher: refTeacher });
+  teacher = []; refA = null; teacherBow = null; refSource = null; refCreated = null; setRefTeacher(null);
+  ['teacher', 'teacherBow', 'refSource', 'refCreated'].forEach(k => store.set(k, null));
+  $('results').hidden = true;
+  status('reference cleared');
+  render();
+};
 
 if (!teacher.length) {
   fetch(`../references/${cfg.name}.json`)
@@ -128,7 +140,6 @@ document.querySelectorAll('[data-mode]').forEach(b => {
     log('mode', mode);
     $('tickTarget').checked = mode === 'teacher';
     if (shownFor !== mode) $('results').hidden = true;   // each role sees only its own result card
-    if (mode === 'teacher') newTeacher = true;
     render();
   };
 });
@@ -233,8 +244,7 @@ function onSample(s, t) {
 function finish(r, note = '', why = '') {
   const who = r.role === 'reference' ? 'teacher' : 'student';
   try {
-    const fresh = who === 'teacher' && newTeacher;   // first take of a teacher session replaces the reference
-    let bow = fresh ? null : teacherBow;
+    let bow = teacherBow;
     if (!r.calib) {
       const c = ex.calibrate(r, pace());
       if (who === 'teacher') bow = Math.max(c.fullBowDeg, bow ?? 0);
@@ -243,7 +253,6 @@ function finish(r, note = '', why = '') {
     const a = ex.analyze(r, pace());
     last[r.role] = r;
     calib = r.calib; store.set('lastCalib', calib);
-    if (fresh) { teacher = []; newTeacher = false; }
     if (who === 'teacher') { teacherBow = bow; store.set('teacherBow', teacherBow); }
     log('take.analyzed', { who, strokes: a.strokes.length, durations: a.strokes.map(k => +k.duration.toFixed(1)),
       fullBowDeg: Math.round(r.calib.fullBowDeg), conj: r.calib.conj });
@@ -251,7 +260,7 @@ function finish(r, note = '', why = '') {
       teacher.push(ex.refPart(a)); refA = ex.pool(teacher); store.set('teacher', teacher);
       refSource = 'Recorded here'; refCreated = new Date().toISOString(); setRefTeacher($('teacherName').value);
       store.set('refSource', refSource); store.set('refCreated', refCreated);
-      showResults(a, who, `Saved to the reference: ${a.strokes.length} strokes. Reference now ${teacher.length} ` +
+      showResults(a, who, `Added to the reference: ${a.strokes.length} strokes. Reference now ${teacher.length} ` +
         `take${teacher.length > 1 ? 's' : ''}, ${refA.strokes.length} strokes.${note}`);
     } else {
       showResults(a, who, undefined, note);
@@ -263,7 +272,7 @@ function finish(r, note = '', why = '') {
 
 function render() {
   document.querySelectorAll('[data-save]').forEach(b => { b.disabled = !last[b.dataset.save]; });
-  $('saveRef').disabled = $('viewRef').disabled = !refA;
+  $('saveRef').disabled = $('viewRef').disabled = $('clearRef').disabled = !refA;
   $('teacherPanel').hidden = mode !== 'teacher';
   $('studentPanel').hidden = mode !== 'student';
   const tp = ex.tempo(refA, cfg, refTarget);
@@ -277,8 +286,8 @@ function render() {
   $('refInfo').innerHTML = (refA
     ? [`${teacher.length} take${teacher.length > 1 ? 's' : ''}`, 'Several strokes',
       refA && `Tempo ${tempoText()} per stroke`, teacherBow && `Full bow ≈ ${teacherBow.toFixed(0)}° of forearm sweep`, refA && refWhere(),
-      newTeacher && 'Replaced by the next teacher take']
-    : ['None yet']).filter(Boolean).map(x => `<li>${x}</li>`).join('');
+      'Each new teacher take is added to it']
+    : ['Empty: each teacher take you record is added here']).filter(Boolean).map(x => `<li>${x}</li>`).join('');
   $('connect').textContent = hub.device ? 'MUGIC connected' : 'Connect MUGIC';
   $('connect').classList.toggle('on', !!hub.device);
   $('connect').hidden = framed && !!hub.device;   // the menu's Connect is behind this frame
