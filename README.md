@@ -69,6 +69,11 @@ Saint Prix (https://unsplash.com/photos/man-playing-violin-in-a-dark-moody-setti
 | Bow change (right hand + forearm) | A/D | 2 | after two-device support |
 | Shift who-led (left hand + forearm) | A | 2 | after two-device support |
 
+Planned for PR #2, camera (optional, like the mic; video stays in the browser):
+1. Video recorded with each take, replayed in sync with the plots; teacher vs student side by side per stroke.
+2. Arm posture from in-browser pose tracking (MediaPipe Pose): elbow height, shoulder lift, upper-arm opening.
+3. Later, research: bow geometry (sounding point, bow parallel to the bridge) with markers and a fixed camera.
+
 Open on the device: which MUGIC axis lies along the forearm when strapped (`forearm_axis` in
 `src/exercises/sonfile.js`, guessed as x). It sets which motion counts as tilt and which as off-plane.
 
