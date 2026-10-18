@@ -1,4 +1,4 @@
-import { connect } from './device.js';
+import { getHub } from './hub.js';
 import { openMic } from './mic.js';
 import { addSample, newRecording, save } from './recording.js';
 import { DEG, geodesic, normalize } from './quat.js';
@@ -13,7 +13,8 @@ const store = {
   set: (k, v) => { try { localStorage.setItem(`mugicGesture.${cfg.name}.${k}`, JSON.stringify(v)); } catch (e) {} },
 };
 
-let device = null, mic = null, rec = null, live = null;   // rec: the take being saved
+const { hub, framed } = getHub();   // in the menu's frame: its connection
+let mic = null, rec = null, live = null;   // rec: the take being saved
 // Who is playing: teacher takes become the reference, student takes are scored against it right away. There is
 // no calibration step: each take finds its own bow direction, and the teacher's largest stroke is the full bow
 // that the student's bow use and speed are measured against.
@@ -27,13 +28,7 @@ const last = {};   // latest recording per role, for download
 
 function status(text) { $('status').textContent = text; }
 
-$('connect').onclick = async () => {
-  try {
-    device = await connect(onSample, () => { device = null; live = null; det = null; state = 'off'; status('disconnected'); render(); });
-    status(`connected: ${device.id}`);
-  } catch (e) { status(e.message); }
-  render();
-};
+$('connect').onclick = () => hub.connect().catch(e => status(e.message));
 
 $('mic').onchange = async e => {
   if (e.target.checked) {
@@ -61,18 +56,7 @@ const roleOf = who => (who === 'teacher' ? 'reference' : 'attempt');
 
 // Short tones so the player knows the state without looking: high = ready, low = take captured,
 // rising pair = ON, falling pair = OFF.
-let audio = null;
-function beep(...freqs) {
-  try {
-    audio ??= new AudioContext();
-    freqs.forEach((freq, i) => {
-      const o = audio.createOscillator(), g = audio.createGain(), t0 = audio.currentTime + i * 0.18;
-      o.frequency.value = freq; g.gain.setValueAtTime(0.2, t0);
-      g.gain.exponentialRampToValueAtTime(0.001, t0 + 0.15);
-      o.connect(g).connect(audio.destination); o.start(t0); o.stop(t0 + 0.15);
-    });
-  } catch (e) {}
-}
+const beep = (...freqs) => hub.beep(...freqs);
 
 // Session: 'off' (motion ignored) -> flick -> 'arming' (settle_s) -> 'waiting' / 'ready' / 'moving' -> flick ->
 // 'resting' (flicks ignored while the player takes the device off and lays it down: at least rest_s, and until
@@ -100,7 +84,7 @@ function onTake(e, take, why) {
     beep(440); endedAt = now;
     live = null;
     rec = newRecording({ exercise: cfg.name, class: cfg.class, mount: cfg.mount, role: roleOf(mode), performer: mode },
-      [{ id: device.id, mount: cfg.mount }]);
+      [{ id: hub.device.id, mount: cfg.mount }]);
     if (mic) rec.extra.mic_rms = take.map(r => r.sample.mic);
     for (const r of take) addSample(rec, 0, r.t, r.sample);
     finish(rec, why === 'limit' ? ` Stopped at the ${cfg.window_s[1] / 60}-minute limit.` : '');
@@ -163,18 +147,19 @@ function render() {
   document.querySelectorAll('[data-save]').forEach(b => { b.disabled = !last[b.dataset.save]; });
   $('refInfo').textContent = (refA ? `${teacher.length} take${teacher.length > 1 ? 's' : ''}, ${refA.strokes.length} strokes${teacherBow ? `, full bow ≈ ${teacherBow.toFixed(0)}° of forearm sweep` : ''}` : 'none yet') +
     (newTeacher && refA ? ' (replaced by the next teacher take)' : '');
-  $('connect').textContent = device ? 'MUGIC connected' : 'Connect MUGIC';
-  $('connect').classList.toggle('on', !!device);
-  $('prompt').textContent = !device ? 'Connect the MUGIC to start.'
+  $('connect').textContent = hub.device ? 'MUGIC connected' : 'Connect MUGIC';
+  $('connect').classList.toggle('on', !!hub.device);
+  $('connect').hidden = framed && !!hub.device;   // the menu's Connect is behind this frame
+  $('prompt').textContent = !hub.device ? 'Connect the MUGIC to start.'
     : `${cap(mode)}: start still at the frog, play sons filés (down-bow first, about 8 s each, as many as you like), then hold still.`;
   document.querySelectorAll('[data-mode]').forEach(b => b.classList.toggle('on', b.dataset.mode === mode));
-  $('state').textContent = !device ? '' : {
+  $('state').textContent = !hub.device ? '' : {
     off: 'OFF: flick to start', arming: 'ON…', resting: 'OFF: take the MUGIC off and lay it down', waiting: 'ON: hold still…', ready: 'ready: play when you like',
     moving: '● recording',
   }[state];
   $('state').className = state;
   $('power').textContent = state === 'off' || state === 'resting' ? 'Turn ON' : 'Turn OFF';
-  $('power').disabled = !device;
+  $('power').disabled = !hub.device;
   $('live').hidden = !live;
 }
 
@@ -238,4 +223,13 @@ function showResults(a, who, message, note = '') {
   plot($('trace'), [{ x: a.t, y: a.ang.map(g => g.off), color: '--c2' }, { x: a.t, y: a.ang.map(g => g.tilt), color: '--c3' }]);
 }
 
-render();
+// Last: subscribing reports the connection state right away, which renders the page.
+const unsubscribe = hub.subscribe({
+  sample: onSample,
+  status() {
+    if (!hub.device) { live = null; det = null; state = 'off'; }
+    status(hub.device ? `connected: ${hub.device.id}` : 'not connected');
+    render();
+  },
+});
+addEventListener('pagehide', unsubscribe);

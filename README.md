@@ -6,7 +6,7 @@ See [SPEC.md](SPEC.md) for the design.
 
 ## Run
 
-    npm start        # python3 -m http.server 8000, then open http://localhost:8000 in Chrome or Edge
+    npm start        # python3 -m http.server 8000, then open http://localhost:8000 (the menu) in Chrome or Edge
     npm test         # node --test (Node 20+), no dependencies
 
 Web Bluetooth needs Chrome/Edge and a secure origin (`localhost` counts). The MUGIC must be in BLE output mode
@@ -34,6 +34,14 @@ been still for 2 s, so taking it off and laying it down can't turn it back on. T
 
 Motion slower than 1.5°/s can be mistaken for holding still (see `src/takes.js`).
 
+## Photos
+
+Gesture card photos (resized): `images/sonfile.jpg` "Violinist" by pbkwee
+(https://www.flickr.com/photos/11704829@N00/10485567666, CC BY 2.0); `images/shift.jpg` by Joel Timothy
+(https://unsplash.com/photos/person-playing-violin-YY3ijZa2lGQ) and `images/bowchange.jpg` by Eric Soubeyrand de
+Saint Prix (https://unsplash.com/photos/man-playing-violin-in-a-dark-moody-setting-MZzGIswK3pU), both under the
+Unsplash License.
+
 ## Layout
 
 - `src/quat.js` quaternion / R(q) / yaw-only reset / gravity check (SPEC §3)
@@ -41,7 +49,9 @@ Motion slower than 1.5°/s can be mistaken for holding still (see `src/takes.js`
 - `src/takes.js` take detector (hold still / move / hold still); `src/flick.js` ON/OFF flick
 - `src/recording.js` recording file (SPEC §10, one entry per device with its own timestamps)
 - `src/exercises/sonfile.js` son filé (class C): analysis, calibration, scoring
-- `src/app.js`, `src/plot.js`, `index.html`, `style.css` UI
+- `index.html` menu (banner, Connect, gesture cards; each gesture opens in a frame sharing the connection)
+- `src/hub.js` the shared connection; `sonfile/index.html` + `src/sonfile-app.js` the son filé page
+- `src/plot.js`, `style.css` (mugicmotion.com look)
 
 ## Exercises
 

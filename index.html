@@ -4,67 +4,98 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>MUGIC Gesture</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Libre+Baskerville:wght@400;700&family=Poppins:wght@400;500;600&display=swap">
   <link rel="stylesheet" href="style.css">
+  <style>
+    /* gestures open in this frame over the menu, so the MUGIC connection (held by this page) carries over */
+    #frame { position: fixed; inset: 0; width: 100%; height: 100%; border: 0; background: var(--bg); display: none; z-index: 10; }
+    body.playing #frame { display: block; }
+    body.playing { overflow: hidden; }
+  </style>
 </head>
 <body>
-  <header>
-    <h1>MUGIC Gesture <small>Son filé</small></h1>
-    <div class="bar">
-      <button id="connect">Connect MUGIC</button>
-      <label><input type="checkbox" id="mic"> Microphone (loudness)</label>
-      <label class="file">Load recording… <input type="file" id="load" accept=".json"></label>
-      <span id="status">not connected</span>
+  <div class="page">
+    <header class="banner">
+      <p class="eyebrow">MUGIC Motion</p>
+      <h1>MUGIC Gesture</h1>
+      <p>Learn a gesture from a teacher, then practise it with your MUGIC and see how close you get.</p>
+    </header>
+    <div class="connect-bar">
+      <button id="connect" class="connect">Connect MUGIC</button>
+      <span id="status">not connected: connect once, it stays connected from gesture to gesture</span>
     </div>
-  </header>
+    <div class="cards" id="cards"></div>
+    <p class="hint center">Needs a MUGIC in BLE output mode (firmware ≥ 2.2.0) and Chrome or Edge on a computer or
+      Android (iPhone/iPad browsers have no Web Bluetooth).</p>
+  </div>
+  <iframe id="frame" title="gesture" allow="microphone; fullscreen"></iframe>
 
-  <main>
-    <section class="now">
-      <p id="prompt"></p>
-      <div class="row">
-        <span class="seg"><button data-mode="teacher">Teacher</button><button data-mode="student">Student</button></span>
-        <button id="power">Turn ON</button><b id="state"></b>
-      </div>
-      <p class="hint">Strap the MUGIC on the bow-arm forearm, just above the wrist. Flick to turn ON (rising beeps),
-        hold still for 2 s to get ready (high beep), play, hold still again to end the take (low beep). Flick again
-        to turn OFF (falling beeps); flicks are then ignored for at least 10 s and until the MUGIC has been laid down still for 2 s.
-        Teacher takes become the reference; student takes are scored against it.</p>
-    </section>
+  <script type="module">
+    import { getHub } from './src/hub.js';
 
-    <section class="steps">
-      <article>
-        <h2>Reference (teacher)</h2>
-        <div class="row"><span id="refInfo"></span>
-          <button data-save="reference">Download last</button></div>
-      </article>
-      <article>
-        <h2>Attempt (student)</h2>
-        <div class="row"><button data-save="attempt">Download last</button></div>
-      </article>
-    </section>
+    const GESTURES = [
+      { id: 'sonfile', family: 'Violin · bow arm · 1 MUGIC', name: 'Son filé',
+        blurb: 'Long, even bow strokes: steady speed, straight path, no wobble.',
+        photo: ['“Violinist” by pbkwee', 'https://www.flickr.com/photos/11704829@N00/10485567666', 'CC BY 2.0', 'https://creativecommons.org/licenses/by/2.0/'] },
+      { id: 'shift', family: 'Violin · left hand · 1 MUGIC', name: 'Left-hand shift', soon: true, focus: 'center 45%',
+        blurb: 'Clean position shifts: one smooth motion, no overshoot, no correction on landing.',
+        photo: ['Joel Timothy', 'https://unsplash.com/photos/person-playing-violin-YY3ijZa2lGQ',
+          'Unsplash License', 'https://unsplash.com/license'] },
+      { id: 'bowchange', family: 'Violin · bow hand + forearm · 2 MUGICs', name: 'Bow change', soon: true, focus: 'center 42%',
+        blurb: 'Smooth changes between up-bow and down-bow, led by the hand and fingers.',
+        photo: ['Eric Soubeyrand de Saint Prix', 'https://unsplash.com/photos/man-playing-violin-in-a-dark-moody-setting-MZzGIswK3pU',
+          'Unsplash License', 'https://unsplash.com/license'] },
+    ];
+    const $ = id => document.getElementById(id);
+    // Photos are credited on each card (CC BY 2.0 or the Unsplash License); the card opens the gesture, the credit its source.
+    $('cards').innerHTML = GESTURES.map(g => `
+      <div class="card${g.soon ? ' soon' : ''}">
+        ${g.soon ? '' : `<a data-frame href="${g.id}/" class="cover" aria-label="${g.name}"></a>`}
+        <img src="images/${g.id}.jpg" alt=""${g.focus ? ` style="object-position: ${g.focus}"` : ''}>
+        <div class="body"><p class="eyebrow">${g.family}</p><h2>${g.name}</h2><p>${g.blurb}</p>
+          ${g.soon ? '<span class="badge">Coming soon</span>' : ''}
+          <p class="credit">Photo: <a href="${g.photo[1]}" target="_blank" rel="noopener">${g.photo[0]}</a>,
+            <a href="${g.photo[3]}" target="_blank" rel="noopener">${g.photo[2]}</a></p></div>
+      </div>`).join('');
 
-    <section id="live" hidden>
-      <h2>Recording <span id="elapsed"></span></h2>
-      <div class="bow" id="bow"><span>tip</span><div class="track"><i id="bowPos"></i></div><span>frog</span></div>
-      <h3>Bow speed (°/s, + = down-bow)</h3>
-      <canvas id="liveSpeed"></canvas>
-      <h3><span class="k2">Off-plane</span> and <span class="k3">tilt</span> (°)</h3>
-      <canvas id="liveAngles"></canvas>
-    </section>
+    const { hub } = getHub();
+    $('connect').onclick = () => hub.connect().catch(e => { $('status').textContent = e.message; });
+    hub.subscribe({ status() {
+      $('connect').classList.toggle('on', !!hub.device);
+      $('connect').textContent = hub.device ? 'MUGIC connected' : 'Connect MUGIC';
+      $('status').textContent = hub.device ? `connected: ${hub.device.id}` : 'not connected: connect once, it stays connected from gesture to gesture';
+    } });
 
-    <section id="results" hidden>
-      <h2 id="resultTitle"></h2>
-      <div class="score"><span id="scoreBox"><b id="score">–</b> / 10</span><p id="coach"></p></div>
-      <div id="details">
-      <p id="summary"></p>
-      <table id="metrics"></table>
-      <h3 id="profileTitle"></h3>
-      <canvas id="profile"></canvas>
-      <h3><span class="k2">Off-plane</span> and <span class="k3">tilt</span> over the recording (°)</h3>
-      <canvas id="trace"></canvas>
-      <table id="strokes"></table>
-      </div>
-    </section>
-  </main>
-  <script type="module" src="src/app.js"></script>
+    // ---------- gesture frame: '#<path>' (e.g. #sonfile/) shows that page over the menu ----------
+    const frame = $('frame'), BASE = location.pathname.replace(/[^/]*$/, '');
+    const framePath = () => decodeURIComponent(location.hash.slice(1));
+    function sync() {
+      const path = framePath();
+      document.body.classList.toggle('playing', !!path);
+      // location.replace, not src: frame navigations must not add browser history entries
+      if (!path) { frame.dataset.path = ''; frame.contentWindow.location.replace('about:blank'); return; }
+      if (frame.dataset.path !== path) { frame.dataset.path = path; frame.contentWindow.location.replace(BASE + path); }
+    }
+    function closeFrame() { if (history.state?.opened) history.back(); else { history.replaceState(null, '', BASE); sync(); } }
+    addEventListener('popstate', sync);
+    document.addEventListener('click', e => {
+      const a = e.target.closest('a[data-frame]');
+      if (!a || e.button || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;   // new tab etc. as usual
+      e.preventDefault();
+      history.pushState({ opened: true }, '', '#' + a.getAttribute('href')); sync();
+    });
+    frame.addEventListener('load', () => {
+      let w;
+      try { w = frame.contentWindow; if (w.location.href === 'about:blank') return; } catch (err) { return; }
+      const path = w.location.pathname.slice(BASE.length) + w.location.search;
+      if (!path) { closeFrame(); return; }   // navigated back to the menu
+      if (path !== framePath()) { frame.dataset.path = path; history.replaceState(history.state, '', '#' + path); }
+      w.document.querySelectorAll('a.back').forEach(a => a.addEventListener('click', e => { e.preventDefault(); closeFrame(); }));
+      w.focus();
+    });
+    sync();
+  </script>
 </body>
 </html>
