@@ -201,6 +201,9 @@ function onTake(e, take, why) {
     rec = null;
   }
   render();
+  // the player can't scroll while playing: bring the timer and bow bar into view, then the result card
+  if (e === 'start') $('live').scrollIntoView({ behavior: 'smooth', block: 'start' });
+  if (e === 'end') $('results').scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 
 function onSample(s, t) {
