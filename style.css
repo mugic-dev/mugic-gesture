@@ -75,6 +75,12 @@ ul.info { flex-basis: 100%; }
 #state { color: var(--muted); font-weight: 500; }
 #state.ready { color: var(--on); }
 #state.moving { color: var(--coral); }
+body[data-rec="hold"] { background: #fde9cf; }
+body[data-rec="no"] { background: #fbd5cf; }
+body[data-rec="yes"] { background: #d9f0e1; }
+.live-state { font-size: 22px; font-weight: 600; color: var(--plum); margin: 0 0 8px; }
+.live-state.warn { color: #fff; background: var(--red); padding: 6px 14px; border-radius: 10px; }
+.live-state.moving { color: var(--green); }
 #state.warn { color: #fff; background: var(--red); padding: 2px 10px; border-radius: 6px; }
 .now .row { margin-bottom: 8px; }
 .seg { display: inline-flex; }

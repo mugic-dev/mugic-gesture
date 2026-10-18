@@ -170,7 +170,13 @@ let state = 'off', det = null, armAt = 0, restUntil = 0, now = 0;
 let calm = null;   // { q, t }: orientation and time since which the device has been still
 const flick = flickDetector();
 
-function turnOn(t, how) { log('session.on', { how, from: state }); state = 'arming'; armAt = t + settle_s; beep(660, 990); render(); }
+function turnOn(t, how) {
+  log('session.on', { how, from: state }); state = 'arming'; armAt = t + settle_s; beep(660, 990);
+  ['elapsed', 'strokeTimer', 'strokeInfo'].forEach(id => { $(id).textContent = ''; });   // last take's
+  $('strokeProg').style.width = '0';
+  render();
+  $('live').scrollIntoView({ behavior: 'smooth', block: 'start' });   // the player can't scroll while playing
+}
 function turnOff(t, how) {
   log('session.off', { how, from: state });
   det?.stop(t - flickCut_s);
@@ -317,7 +323,13 @@ function render() {
   if (warning) $('state').textContent = 'NOT RECORDING: hold still 2 s, then play';
   $('power').textContent = state === 'off' || state === 'resting' ? 'Turn ON' : 'Turn OFF';
   $('power').disabled = !hub.device;
-  $('live').hidden = !live;
+  // while ON the recording panel shows the state as a banner, and the page is tinted: orange = hold still,
+  // red = moving but not recording, green = ready or recording (playing is recorded)
+  const on = ['arming', 'waiting', 'ready', 'moving'].includes(state);
+  $('live').hidden = !on && !live;
+  $('liveState').textContent = $('state').textContent;
+  $('liveState').className = `live-state ${$('state').className}`;
+  document.body.dataset.rec = !on ? '' : warning ? 'no' : state === 'ready' || state === 'moving' ? 'yes' : 'hold';
 }
 
 const span = 10;   // seconds of live trace shown
