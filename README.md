@@ -31,7 +31,7 @@ After Connect the app is OFF and ignores motion (scrolling, adjusting). A flick 
 ON (rising beeps; 1 s to settle). While ON, holding still (orientation within 1.5° for 2 s) gets ready (high
 beep), moving starts a take, holding still again ends it (low, then falling beeps) and turns it OFF: one take per
 ON. A flick mid-take also turns it OFF (falling beeps): the take in progress is kept up to 0.4 s before the flick, or dropped when it has
-less than 1 s of motion (the flick itself). After either, flicks are ignored for at least 3 s and until the device has
+less than 1 s of motion (the flick itself). After either, flicks are ignored for at least 10 s and until the device has
 been still for 2 s, so taking it off and laying it down can't turn it back on. The ON/OFF button does the same as the flick.
 
 Motion slower than 1.5°/s can be mistaken for holding still (see `src/takes.js`).
