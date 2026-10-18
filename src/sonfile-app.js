@@ -31,7 +31,7 @@ let mode = 'student', modePicked = false;   // starts in Teacher only while ther
 let teacher = store.get('teacher') ?? [], refA = teacher.length ? ex.pool(teacher) : null;
 if (!refA) mode = 'teacher';
 let teacherBow = store.get('teacherBow'), calib = store.get('lastCalib');   // calib: latest take's, for the live view
-let newTeacher = false, refSource = store.get('refSource');   // where the reference came from, for display
+let newTeacher = false, refSource = store.get('refSource'), refMeta = store.get('refMeta') ?? '';   // where the reference came from, for display
 const last = {};   // latest recording per role, for download
 
 function status(text) { $('status').textContent = text; }
@@ -46,7 +46,7 @@ $('loadRef').onchange = async e => {
   const file = e.target.files[0];
   e.target.value = '';
   if (!file) return;
-  try { useReference(JSON.parse(await file.text()), `Loaded from ${file.name}`); } catch (err) { log('reference.error', err.message); status(`${file.name}: ${err.message}`); }
+  try { useReference(JSON.parse(await file.text()), `Loaded from ${file.name}`); showReference(); } catch (err) { log('reference.error', err.message); status(`${file.name}: ${err.message}`); }
 };
 
 function useReference(data, source) {
@@ -58,9 +58,21 @@ function useReference(data, source) {
   log('reference.use', { source, takes: teacher.length, fullBowDeg: teacherBow });
   if (!modePicked) mode = 'student';   // e.g. the built-in reference arrived after the page opened in Teacher
   store.set('teacher', teacher); store.set('teacherBow', teacherBow); store.set('refSource', refSource);
+  refMeta = data.created && !isNaN(Date.parse(data.created)) ? ` · created ${new Date(data.created).toLocaleString()}` : '';
+  store.set('refMeta', refMeta);
   status(`reference: ${source.toLowerCase()}`);
   render();
 }
+
+// The reference card: what was loaded (or recorded) and the teacher's strokes, shape and averages.
+function showReference() {
+  if (!refA) return;
+  const n = teacher.length;
+  showResults({ strokes: refA.strokes, turns: refA.turns }, 'teacher',
+    `${refSource ?? 'Recorded here'}${refMeta} · ${n} take${n > 1 ? 's' : ''}` +
+    (teacherBow ? ` · full bow ≈ ${teacherBow.toFixed(0)}° of forearm sweep` : ''), '', 'Teacher reference');
+}
+$('viewRef').onclick = showReference;
 
 if (!teacher.length) {
   fetch(`../references/${cfg.name}.json`)
@@ -183,7 +195,7 @@ function finish(r, note = '') {
       fullBowDeg: Math.round(r.calib.fullBowDeg), conj: r.calib.conj });
     if (who === 'teacher') {
       teacher.push(ex.refPart(a)); refA = ex.pool(teacher); store.set('teacher', teacher);
-      refSource = 'Recorded here'; store.set('refSource', refSource);
+      refSource = 'Recorded here'; refMeta = ''; store.set('refSource', refSource); store.set('refMeta', refMeta);
       showResults(a, who, `Saved to the reference: ${a.strokes.length} strokes. Reference now ${teacher.length} ` +
         `take${teacher.length > 1 ? 's' : ''}, ${refA.strokes.length} strokes.${note}`);
     } else {
@@ -196,7 +208,7 @@ function finish(r, note = '') {
 
 function render() {
   document.querySelectorAll('[data-save]').forEach(b => { b.disabled = !last[b.dataset.save]; });
-  $('saveRef').disabled = !refA;
+  $('saveRef').disabled = $('viewRef').disabled = !refA;
   $('teacherPanel').hidden = mode !== 'teacher';
   $('studentPanel').hidden = mode !== 'student';
   $('refLine').textContent = refA ? `Scored against the teacher reference (${refSource?.toLowerCase() ?? 'recorded here'}).`
@@ -250,24 +262,30 @@ function band(profiles) {
 // Result card after every take. Both players: stroke count, average time and speed, evenness and stroke shape.
 // The student also gets the 0-10 score, the measures against the teacher and the overlay on the teacher's shape.
 let shownFor = null;   // whose take the result card shows
-function showResults(a, who, message, note = '') {
+function showResults(a, who, message, note = '', title = `${cap(who)} take`) {
   shownFor = who;
   const ok = a?.strokes.length > 0, student = who === 'student';
   $('results').hidden = false;
-  $('resultTitle').textContent = `${cap(who)} take`;
+  $('resultTitle').textContent = title;
   $('details').hidden = !ok;
   const s = student && ok && refA?.strokes.length ? ex.score(a, refA) : null;
   $('scoreBox').hidden = !s;
-  $('metrics').hidden = !s;
   $('score').textContent = s?.total?.toFixed(1) ?? '–';
   $('coach').textContent = (message ?? (s ? s.coach : ok ? 'Record the teacher first to get a score.' : 'No strokes found.')) + note;
   if (!ok) return;
   const avg = key => a.strokes.reduce((t, k) => t + k[key], 0) / a.strokes.length;
   $('summary').textContent = `${a.strokes.length} strokes · ${avg('duration').toFixed(1)} s each · ` +
     `average speed ${avg('speedCmS').toFixed(1)} cm/s · evenness ${Math.round(100 * (1 - avg('speedCv')))}%`;
-  $('metrics').innerHTML = '<tr><th>Measure</th><th>Student</th><th>Teacher</th><th>Score /10</th></tr>' + (s ? s.rows : []).map(r =>
-    `<tr class="${r.bad > 2 ? 'bad' : ''}"><td>${r.label}</td><td>${r.value.toFixed(r.digits)}</td>` +
-    `<td>${r.ref.toFixed(r.digits)}${r.key === 'duration' ? ` ± ${cfg.stroke_s[1]}` : ''}</td><td>${r.score.toFixed(1)}</td></tr>`).join('');
+  // student: measures against the teacher with scores; teacher take or reference: the teacher's average per measure
+  const mean = vals => (vals.length ? vals.reduce((t, v) => t + v, 0) / vals.length : null);
+  $('metrics').innerHTML = s
+    ? '<tr><th>Measure</th><th>Student</th><th>Teacher</th><th>Score /10</th></tr>' + s.rows.map(r =>
+      `<tr class="${r.bad > 2 ? 'bad' : ''}"><td>${r.label}</td><td>${r.value.toFixed(r.digits)}</td>` +
+      `<td>${r.ref.toFixed(r.digits)}${r.key === 'duration' ? ` ± ${cfg.stroke_s[1]}` : ''}</td><td>${r.score.toFixed(1)}</td></tr>`).join('')
+    : '<tr><th>Measure</th><th>Teacher average</th></tr>' + ex.metrics.map(m => {
+      const v = mean((m.key === 'turnJerk' ? a.turns ?? [] : a.strokes).map(k => k[m.key]).filter(x => x != null));
+      return v == null ? '' : `<tr><td>${m.label}</td><td>${v.toFixed(m.digits)}</td></tr>`;
+    }).join('');
   const f = (v, d) => (v == null ? '–' : v.toFixed(d));
   $('strokes').innerHTML = '<tr><th>#</th><th>Bow</th><th>Time (s)</th><th>Bow used</th><th>Speed (cm/s)</th><th>Speed CV</th><th>Off-plane (°)</th><th>Tilt (°)</th><th>Loudness CV</th></tr>' +
     a.strokes.map((k, i) => `<tr><td>${i + 1}</td><td>${k.dir > 0 ? 'down' : 'up'}</td><td>${f(k.duration, 1)}</td>` +
@@ -281,7 +299,8 @@ function showResults(a, who, message, note = '') {
   $('profileTitle').innerHTML = student
     ? '<span class="k2">Student</span> strokes over the <span class="k1">teacher</span>\'s shape (bow speed over each stroke)'
     : 'Stroke shape: each stroke\'s bow speed, with the average ± spread';
-  plot($('trace'), [{ x: a.t, y: a.ang.map(g => g.off), color: '--c2' }, { x: a.t, y: a.ang.map(g => g.tilt), color: '--c3' }]);
+  $('traceBox').hidden = !a.t;   // a reference has strokes only, no recording
+  if (a.t) plot($('trace'), [{ x: a.t, y: a.ang.map(g => g.off), color: '--c2' }, { x: a.t, y: a.ang.map(g => g.tilt), color: '--c3' }]);
 }
 
 // Last: subscribing reports the connection state right away, which renders the page.

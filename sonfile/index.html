@@ -46,6 +46,7 @@
         <h2>Teacher reference</h2>
         <p>Record your own takes to replace the reference, or load one from a file.</p>
         <div class="row"><ul id="refInfo" class="info"></ul>
+          <button id="viewRef">View reference</button>
           <button id="saveRef">Save reference</button>
           <label class="file">Load reference… <input type="file" id="loadRef" accept=".json"></label>
           <button data-save="reference">Download last take</button></div>
@@ -74,8 +75,10 @@
       <table id="metrics"></table>
       <h3 id="profileTitle"></h3>
       <canvas id="profile"></canvas>
+      <div id="traceBox">
       <h3><span class="k2">Off-plane</span> and <span class="k3">tilt</span> over the recording (°)</h3>
       <canvas id="trace"></canvas>
+      </div>
       <table id="strokes"></table>
       </div>
     </section>
