@@ -9,6 +9,7 @@
   }
 }
 * { box-sizing: border-box; }
+[hidden] { display: none !important; }
 body { margin: 0; padding: 16px; background: var(--bg); color: var(--text); font: 15px/1.45 system-ui, sans-serif; }
 main { max-width: 960px; margin: 0 auto; display: grid; gap: 16px; }
 header { max-width: 960px; margin: 0 auto 16px; }

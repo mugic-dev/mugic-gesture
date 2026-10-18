@@ -35,3 +35,17 @@ test('score flags the defect against a clean reference', () => {
   assert.ok(s.total < score(ref, ref).total);
   assert.match(s.coach, /tilt/);
 });
+
+test('down-bow sweeps toward the tip whichever way the device quaternion turns', () => {
+  for (const flip of [false, true]) {
+    const device = opts => {   // a device whose quaternion is world -> body when flipped
+      const rec = synthBow(opts);
+      if (flip) rec.devices[0].q = rec.devices[0].q.map(q => [q[0], -q[1], -q[2], -q[3]]);
+      return rec;
+    };
+    const calib = calibrate(device({ strokes: 1 }));
+    assert.equal(calib.conj, flip);
+    const a = analyze({ ...device(), calib });
+    assert.ok(a.ang[a.strokes[0].i1].sweep > 50, `flip ${flip}: sweep ${a.ang[a.strokes[0].i1].sweep}`);
+  }
+});

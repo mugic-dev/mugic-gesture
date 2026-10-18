@@ -2,7 +2,7 @@
 // Per stroke, over the middle 80%: bow speed evenness, drift of the forearm out of its bowing plane, forearm tilt
 // wobble, loudness evenness (mic); plus the jerk around each bow change and the stroke duration.
 // All thresholds are starting guesses, to be fixed from recorded data.
-import { DEG, apply, clamp, conj, continuous, cross, mul, reject, toMatrix, vdot, vnormalize } from '../quat.js';
+import { DEG, apply, clamp, conj, continuous, cross, mul, normalize, reject, toMatrix, vdot, vnormalize } from '../quat.js';
 
 export const config = {
   name: 'son_file', title: 'Son filé', class: 'C', mount: 'bow_forearm',
@@ -89,11 +89,14 @@ function segment(t, u, cfg) {
   return out;
 }
 
-// Analyze the first device of a recording. Uses rec.calib ({axis, fullBowDeg}) when present.
+// The device quaternion as body -> world: calibration finds whether it has to be conjugated.
+export const orient = (q, calib) => (calib?.conj ? conj(q) : q);
+
+// Analyze the first device of a recording. Uses rec.calib ({axis, fullBowDeg, conj}) when present.
 export function analyze(rec, cfg = config) {
   const d = rec.devices[0], t = d.t, calib = rec.calib, mic = rec.extra?.mic_rms;
   if (t.length < 10) return { strokes: [], turns: [], summary: {} };
-  const q = continuous(d.q);
+  const q = continuous(d.q.map(qi => orient(qi, calib)));
   const f = frame(calib?.axis ?? bowAxis(d.gyro), cfg);
   const u = smooth(d.gyro.map(g => vdot(g, f.axis)), 5);
   const ang = q.map(qi => angles(q[0], qi, f));
@@ -137,14 +140,17 @@ export function analyze(rec, cfg = config) {
   return { t, u, ang, strokes, turns, summary };
 }
 
-// Calibration recording: one slow full down-bow from frog to tip. Fixes the bow axis (positive = down-bow) and
-// the forearm sweep of a full bow, which turns sweep into bow position and speed into cm/s.
+// Calibration recording: one slow full down-bow from frog to tip. Fixes the bow axis (positive = down-bow, from
+// the gyro), the forearm sweep of a full bow (turns sweep into bow position and speed into cm/s), and whether the
+// quaternion must be conjugated so that it turns the same way as the gyro (sweep grows toward the tip).
 export function calibrate(rec, cfg = config) {
-  const axis = bowAxis(rec.devices[0].gyro);
+  const d = rec.devices[0], axis = bowAxis(d.gyro);
   const { strokes } = analyze({ ...rec, calib: { axis, fullBowDeg: 1 } }, cfg);
   const fullBowDeg = Math.max(0, ...strokes.map(s => s.extent));
   if (fullBowDeg < 10) throw new Error('No full bow found in the calibration recording.');
-  return { axis, fullBowDeg };
+  const { i0, i1 } = strokes.find(s => s.extent === fullBowDeg);
+  const turn = mul(conj(normalize(d.q[i0])), normalize(d.q[i1]));
+  return { axis, fullBowDeg, conj: vdot(turn.slice(1), axis) * turn[0] < 0 };
 }
 
 // Score an attempt against a reference (teacher) analysis: each metric becomes a z-score against the reference

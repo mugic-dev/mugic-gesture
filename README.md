@@ -44,7 +44,8 @@ Open on the device: which MUGIC axis lies along the forearm when strapped (`fore
 
 - BNO055 in NDOF fusion mode (magnetometer on: yaw is absolute but unreliable indoors; use relative yaw).
 - Default rate 50 Hz (`loop_delay` 20 ms); configurable down to 10 ms (100 Hz).
-- Units: accel m/s², gyro °/s, Euler degrees; quaternion (w,x,y,z) scaled 1/2^14, sensor→earth.
+- Units: accel m/s², gyro °/s, Euler degrees; quaternion (w,x,y,z) scaled 1/2^14. Its direction (body→world or
+  world→body) is not assumed: the son filé calibration measures it against the gyro (`calib.conj`).
 - Default accel mode is `LINEAR_ACCEL`: `acc` is already gravity-free, in the body frame.
   The SPEC §3 gravity check (`R·a ≈ (0,0,±9.81)`) needs `RAW_ACCEL` mode.
 - OSC float args: acc 0-2, euler 3-5, gyro 6-8, mag 9-11, quat 12-15, battery volts 16.

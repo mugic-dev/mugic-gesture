@@ -83,7 +83,7 @@ function onSample(s, now) {
   if (mic) s.mic = mic.rms();
   feed(s, now);
   if (!live) return;
-  const q = normalize(s.q);
+  const q = normalize(ex.orient(s.q, calib));
   live.q0 ??= q;
   const a = ex.angles(live.q0, q, live.f), t = now - (live.tStart ??= now);
   live.t.push(t); live.speed.push(vdot(s.gyro, live.f.axis)); live.off.push(a.off); live.tilt.push(a.tilt);
@@ -133,6 +133,7 @@ const span = 10;   // seconds of live trace shown
     plot($('liveSpeed'), [{ x, y: live.speed.slice(i), color: '--c1' }], { xmin: t1 - span, xmax: t1 });
     plot($('liveAngles'), [{ x, y: live.off.slice(i), color: '--c2' }, { x, y: live.tilt.slice(i), color: '--c3' }],
       { xmin: t1 - span, xmax: t1, ymin: -10, ymax: 10 });
+    $('bow').hidden = !calib;   // no bow size until calibrated
     const pos = calib ? Math.min(1, Math.max(0, live.sweep / calib.fullBowDeg)) : 0;
     $('bowPos').style.left = `${(1 - pos) * 100}%`;   // tip on the left, frog on the right
   }
