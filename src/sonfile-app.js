@@ -46,6 +46,7 @@ $('teacherName').onchange = () => {   // the name this browser's teacher records
 };
 // Target stroke duration: set by the teacher's slider (refTarget, kept in the reference), else the teacher's average.
 let refTarget = store.get('refTarget') ?? null;
+$('tickTarget').checked = mode === 'teacher';   // a tick at the target time helps the teacher hold the tempo
 const tempoText = () => { const { s, tol } = ex.tempo(refA, cfg, refTarget); return `${s.toFixed(1)} s ± ${tol.toFixed(1)}`; };
 // Detection thresholds for the current target tempo and the teacher's full bow.
 const pace = () => ex.paced(ex.tempo(refA, cfg, refTarget).s, teacherBow ?? 60);
@@ -86,7 +87,7 @@ function useReference(data, source) {
   teacher = data.takes; teacherBow = data.fullBowDeg ?? null; refA = ex.pool(teacher); newTeacher = false;
   refSource = source;
   log('reference.use', { source, takes: teacher.length, fullBowDeg: teacherBow });
-  if (!modePicked) mode = 'student';   // e.g. the built-in reference arrived after the page opened in Teacher
+  if (!modePicked) { mode = 'student'; $('tickTarget').checked = false; }   // e.g. the built-in reference arrived after the page opened in Teacher
   store.set('teacher', teacher); store.set('teacherBow', teacherBow); store.set('refSource', refSource);
   refCreated = data.created ?? null;
   store.set('refCreated', refCreated); setRefTeacher(data.teacher);
@@ -125,6 +126,7 @@ document.querySelectorAll('[data-mode]').forEach(b => {
   b.onclick = () => {
     mode = b.dataset.mode; modePicked = true;
     log('mode', mode);
+    $('tickTarget').checked = mode === 'teacher';
     if (shownFor !== mode) $('results').hidden = true;   // each role sees only its own result card
     if (mode === 'teacher') newTeacher = true;
     render();
@@ -165,7 +167,11 @@ function onTake(e, take, why) {
   state = e === 'start' ? 'moving' : e === 'ready' ? 'ready' : e === 'end' ? 'waiting' : state;
   if (e === 'ready') beep(880);
   if (e === 'start') {
-    live = { q0: null, bow: ex.liveBow(pace()), lastT: null, t: [], speed: [], off: [], tilt: [], theta: 0 };
+    const p = pace();
+    // stroke timer: counts up from the start of the take, restarts at each bow change (zero crossing of the
+    // smoothed bow speed, confirmed once it passes the moving threshold the other way)
+    live = { pace: p, target: ex.tempo(refA, cfg, refTarget).s, ue: 0, dir: 0, n: 1, strokeT0: 0, flipT: 0, ticked: false,
+      q0: null, bow: ex.liveBow(p), lastT: null, t: [], speed: [], off: [], tilt: [], theta: 0 };
   }
   if (e === 'cancel') live = null;
   if (e === 'end') {   // one take per ON: the session then rests as after an OFF flick
@@ -209,6 +215,18 @@ function onSample(s, t) {
   const a = ex.angles(live.q0, qo, ex.frame(b.axis)), lt = t - (live.tStart ??= t);
   live.t.push(lt); live.speed.push(b.u); live.off.push(a.off); live.tilt.push(a.tilt);
   live.theta = b.theta;
+  const ue = live.ue + 0.2 * (b.u - live.ue), th = live.pace.reversal_dps;
+  if (Math.sign(ue) !== Math.sign(live.ue)) live.flipT = lt;
+  live.ue = ue;
+  const dir = ue > th ? 1 : ue < -th ? -1 : 0;
+  if (dir && dir !== live.dir) {
+    if (live.dir) { ++live.n; live.strokeT0 = live.flipT; live.ticked = false; }
+    live.dir = dir;
+  }
+  if (!live.ticked && lt - live.strokeT0 >= live.target) {
+    live.ticked = true;
+    if ($('tickTarget').checked) beep(1320);
+  }
 }
 
 // Calibrate, analyze and report a finished (or loaded) take; every take ends with the result card.
@@ -288,6 +306,11 @@ const span = 10;   // seconds of live trace shown
   if (live?.t.length) {
     const t1 = live.t[live.t.length - 1], i = live.t.findIndex(t => t > t1 - span), x = live.t.slice(i);
     $('elapsed').textContent = `${t1.toFixed(1)} s`;
+    const el = t1 - live.strokeT0, over = el > live.target + ex.tempo(refA, cfg, refTarget).tol;
+    $('strokeTimer').textContent = `${el.toFixed(1)} / ${live.target.toFixed(1)} s`;
+    $('strokeProg').style.width = `${Math.min(1, el / live.target) * 100}%`;
+    $('strokeProg').parentElement.classList.toggle('over', over);
+    $('strokeInfo').textContent = `stroke ${live.n}${live.dir ? (live.dir > 0 ? ' · down-bow' : ' · up-bow') : ''}`;
     plot($('liveSpeed'), [{ x, y: live.speed.slice(i), color: '--c1' }], { xmin: t1 - span, xmax: t1 });
     plot($('liveAngles'), [{ x, y: live.off.slice(i), color: '--c2' }, { x, y: live.tilt.slice(i), color: '--c3' }],
       { xmin: t1 - span, xmax: t1, ymin: -10, ymax: 10 });

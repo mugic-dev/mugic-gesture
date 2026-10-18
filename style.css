@@ -93,6 +93,12 @@ canvas { width: 100%; height: 140px; display: block; }
 .score p { color: var(--text); margin: 0; }
 #target { width: 220px; accent-color: var(--coral); }
 #targetNum { width: 5.5em; font: inherit; font-size: 17px; font-weight: 600; padding: 3px 8px; border: 1px solid var(--line); border-radius: 8px; text-align: right; }
+.timer { display: flex; align-items: center; gap: 16px; margin: 4px 0 12px; }
+.timer b { font-family: var(--serif); font-size: 44px; line-height: 1; color: var(--plum); min-width: 5.5em; }
+.timer .prog { flex: 1; height: 12px; background: var(--cream); border-radius: 6px; overflow: hidden; }
+.timer .prog i { display: block; height: 100%; width: 0; background: var(--green); }
+.timer .prog.over i { background: var(--coral); }
+#strokeInfo { color: var(--muted); white-space: nowrap; }
 .tempo { color: var(--text); font-size: 17px; font-weight: 500; }
 #summary { color: var(--text); margin-top: 8px; }
 table { width: 100%; border-collapse: collapse; margin-top: 12px; font-size: 14px; display: block; overflow-x: auto; }

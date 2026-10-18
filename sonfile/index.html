@@ -29,6 +29,7 @@
       <div class="row">
         <span class="seg"><button data-mode="student">Student</button><button data-mode="teacher">Teacher</button></span>
         <button id="power">Turn ON</button><b id="state"></b>
+        <label><input type="checkbox" id="tickTarget"> Tick at target</label>
       </div>
       <ul class="hint">
         <li>Strap the MUGIC on the bow-arm forearm, just above the wrist.</li>
@@ -67,6 +68,7 @@
 
     <section id="live" hidden>
       <h2>Recording <span id="elapsed"></span></h2>
+      <div class="timer"><b id="strokeTimer"></b><div class="prog"><i id="strokeProg"></i></div><span id="strokeInfo"></span></div>
       <div class="bow" id="bow"><span>tip</span><div class="track"><i id="bowPos"></i></div><span>frog</span></div>
       <h3>Bow speed (°/s, + = down-bow)</h3>
       <canvas id="liveSpeed"></canvas>
