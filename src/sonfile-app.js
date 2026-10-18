@@ -47,6 +47,8 @@ $('teacherName').onchange = () => {   // the name this browser's teacher records
 // Target stroke duration: set by the teacher's slider (refTarget, kept in the reference), else the teacher's average.
 let refTarget = store.get('refTarget') ?? null;
 const tempoText = () => { const { s, tol } = ex.tempo(refA, cfg, refTarget); return `${s.toFixed(1)} s ± ${tol.toFixed(1)}`; };
+// Detection thresholds for the current target tempo and the teacher's full bow.
+const pace = () => ex.paced(ex.tempo(refA, cfg, refTarget).s, teacherBow ?? 60);
 const setTarget = v => { refTarget = v; store.set('refTarget', v); log('reference.target', v); render(); };
 $('target').oninput = () => setTarget(+$('target').value);
 $('targetAuto').onclick = () => setTarget(null);
@@ -162,7 +164,7 @@ function onTake(e, take, why) {
   state = e === 'start' ? 'moving' : e === 'ready' ? 'ready' : e === 'end' ? 'waiting' : state;
   if (e === 'ready') beep(880);
   if (e === 'start') {
-    live = { q0: null, bow: ex.liveBow(), lastT: null, t: [], speed: [], off: [], tilt: [], theta: 0 };
+    live = { q0: null, bow: ex.liveBow(pace()), lastT: null, t: [], speed: [], off: [], tilt: [], theta: 0 };
   }
   if (e === 'cancel') live = null;
   if (e === 'end') {   // one take per ON: the session then rests as after an OFF flick
@@ -172,7 +174,7 @@ function onTake(e, take, why) {
       [{ id: hub.device.id, mount: cfg.mount }]);
     if (mic) rec.extra.mic_rms = take.map(r => r.sample.mic);
     for (const r of take) addSample(rec, 0, r.t, r.sample);
-    finish(rec, why === 'limit' ? ` Stopped at the ${cfg.window_s[1] / 60}-minute limit.` : '', why);
+    finish(rec, why === 'limit' ? ` Stopped at the ${Math.round(pace().window_s[1] / 60)}-minute limit.` : '', why);
     rec = null;
   }
   render();
@@ -193,7 +195,9 @@ function onSample(s, t) {
   }
   if (state === 'arming' && t >= armAt) {
     log('session.armed');
-    state = 'waiting'; det = takeDetector({ max_s: cfg.window_s[1] }, onTake); render();
+    const p = pace();
+    log('session.pace', { strokeS: ex.tempo(refA, cfg, refTarget).s, reversalDps: +p.reversal_dps.toFixed(2), endHoldS: p.end_hold_s, maxS: p.window_s[1] });
+    state = 'waiting'; det = takeDetector({ max_s: p.window_s[1], end_hold_s: p.end_hold_s }, onTake); render();
   }
   if (!det) return;
   det.feed(s, t);
@@ -213,11 +217,11 @@ function finish(r, note = '', why = '') {
     const fresh = who === 'teacher' && newTeacher;   // first take of a teacher session replaces the reference
     let bow = fresh ? null : teacherBow;
     if (!r.calib) {
-      const c = ex.calibrate(r);
+      const c = ex.calibrate(r, pace());
       if (who === 'teacher') bow = Math.max(c.fullBowDeg, bow ?? 0);
       r.calib = { ...c, fullBowDeg: bow ?? c.fullBowDeg };
     }
-    const a = ex.analyze(r);
+    const a = ex.analyze(r, pace());
     last[r.role] = r;
     calib = r.calib; store.set('lastCalib', calib);
     if (fresh) { teacher = []; newTeacher = false; }

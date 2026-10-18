@@ -40,6 +40,14 @@ test('moving right after a take does not start another: the next take needs a fr
   assert.deepEqual(events, ['ready', 'start', 'end', 'ready']);
 });
 
+test('a one-minute bow is not cut at its bow changes when the end hold follows the tempo', () => {
+  const rec = synthBow({ rest: 8, strokes: 3, strokeS: 60, angle: 60 }), d = rec.devices[0];
+  const takes = [], det = takeDetector({ end_hold_s: 6, max_s: 600 }, (e, take) => take && takes.push(take));
+  d.t.forEach((t, i) => det.feed({ q: d.q[i] }, t));
+  assert.equal(takes.length, 1);
+  assert.ok(takes[0].at(-1).t - takes[0][0].t > 180, `take ${takes[0].at(-1).t - takes[0][0].t} s`);
+});
+
 test('no take without a held pose first', () => {
   assert.deepEqual(run(synthBow({ rest: 1 })).events, []);
 });

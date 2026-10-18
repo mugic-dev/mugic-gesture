@@ -186,6 +186,16 @@ export const pool = parts => ({ strokes: parts.flatMap(p => p.strokes), turns: p
 // 0-10 from how many reference spreads worse than the reference: 0 -> 10, 1 -> 9, 2 -> 6.9, 3 -> 5, 6 -> 2.
 export const toTen = z => Math.round(100 / (1 + (z / 3) ** 2)) / 10;
 
+// Thresholds scaled to the target tempo, so slow bows (16 s, a whole minute) are still seen as strokes: the
+// expected bow speed is fullBowDeg / stroke seconds; a bow counts as moving above 40% of it (at most
+// reversal_dps), a take ends on a hold of 10% of a stroke (at least 2 s), and a take may last 10 strokes (at
+// least window_s[1]).
+export function paced(strokeS, fullBowDeg = 60, cfg = config) {
+  const speed = fullBowDeg / strokeS;
+  return { ...cfg, reversal_dps: clamp(0.4 * speed, 0.3, cfg.reversal_dps), end_hold_s: Math.max(2, 0.1 * strokeS),
+    window_s: [cfg.window_s[0], Math.max(cfg.window_s[1], 10 * strokeS)] };
+}
+
 // The stroke duration students are held to: the target the teacher set, else the teacher's average stroke; ± the
 // larger of 10%, stroke_s[1] and (for the average) the teacher's own spread. Without either, stroke_s.
 export function tempo(ref, cfg = config, target = null) {

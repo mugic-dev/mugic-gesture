@@ -44,6 +44,9 @@ per-stroke measures and stroke shapes of the pooled teacher takes, the teacher's
 one with such a file, so a teacher trains once and reuses it across students and sessions, or sends it to a
 remote student. The reference also sets the **target stroke duration** students are held to and are shown: the teacher's
 average stroke by default, or what the teacher sets with the **Target stroke** slider (2-60 s, kept in the file).
+Detection follows that target too (with the teacher's full bow, the expected bow speed): a bow counts as moving
+above 40% of the expected speed (at most 3 °/s), a take ends on a hold of 10% of a stroke (at least 2 s), and a
+take may last 10 strokes (at least 3 min). So a 1-minute bow works: set the slider before recording it.
 A curated file placed at `references/son_file.json` ships with the app and is used whenever the
 browser has no reference of its own, so no teacher training is needed.
 

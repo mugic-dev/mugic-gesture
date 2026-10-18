@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { analyze, calibrate, liveBow, pool, refPart, score, tempo, toTen } from '../src/exercises/sonfile.js';
+import { analyze, calibrate, liveBow, pool, refPart, paced, score, tempo, toTen } from '../src/exercises/sonfile.js';
 import { synthBow } from './synth.js';
 
 test('clean bows: strokes, durations and near-zero defects', () => {
@@ -80,4 +80,13 @@ test('stroke duration is scored against the teacher tempo, not a fixed 8 s', () 
   // a target set by the teacher overrides the measured average
   assert.equal(tempo(ref, undefined, 30).s, 30);
   assert.ok(score(analyze(synthBow({ strokes: 4, strokeS: 16 })), ref, undefined, 30).rows.find(r => r.key === 'duration').score < 3);
+});
+
+test('a one-minute bow is found once the thresholds follow the target tempo', () => {
+  const rec = synthBow({ strokes: 3, strokeS: 60, angle: 60 });
+  assert.equal(analyze(rec).strokes.length, 0);   // 1 °/s: below the default 3 °/s
+  const s = analyze(rec, paced(60, 60)).strokes;
+  assert.equal(s.length, 3);
+  assert.ok(s.every(k => Math.abs(k.duration - 60) < 6), s.map(k => k.duration).join());
+  assert.equal(paced(4.7, 79).reversal_dps, 3);   // normal tempos keep the default
 });
