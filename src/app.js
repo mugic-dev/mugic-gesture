@@ -18,8 +18,10 @@ let device = null, mic = null, rec = null, live = null;   // rec: the take being
 // (arms differ in how far the forearm sweeps over a full bow).
 let mode = store.get('mode') ?? 'teacher';
 const calibs = { teacher: store.get('calib.teacher'), student: store.get('calib.student') };
-// The reference pools every teacher take (strokes and bow changes only) until Clear teacher.
+// The reference pools the teacher takes (strokes and bow changes only) of the latest teacher session: pressing
+// Teacher starts a session, and its first take replaces the previous pool.
 let calib = calibs[mode], teacher = store.get('teacher') ?? [], refA = teacher.length ? ex.pool(teacher) : null;
+let newTeacher = false;
 const last = {};   // latest recording per role, for download
 
 function status(text) { $('status').textContent = text; }
@@ -39,10 +41,13 @@ $('mic').onchange = async e => {
 };
 
 document.querySelectorAll('[data-save]').forEach(b => { b.onclick = () => last[b.dataset.save] && save(last[b.dataset.save]); });
-$('clearRef').onclick = () => { teacher = []; refA = null; store.set('teacher', teacher); render(); };
 $('recal').onclick = () => { calib = calibs[mode] = null; store.set(`calib.${mode}`, null); render(); };
 document.querySelectorAll('[data-mode]').forEach(b => {
-  b.onclick = () => { mode = b.dataset.mode; calib = calibs[mode]; store.set('mode', mode); render(); };
+  b.onclick = () => {
+    mode = b.dataset.mode; calib = calibs[mode]; store.set('mode', mode);
+    if (mode === 'teacher') newTeacher = true;
+    render();
+  };
 });
 
 $('load').onchange = async e => {
@@ -135,6 +140,7 @@ function finish(r) {
     } else if (r.role === 'reference') {
       const a = ex.analyze(r);
       if (!a.strokes.length) throw new Error('Take ignored: no strokes found.');
+      if (newTeacher) { teacher = []; newTeacher = false; }
       teacher.push(ex.refPart(a)); refA = ex.pool(teacher); store.set('teacher', teacher);
     } else {
       showResults(ex.analyze(r));
@@ -152,7 +158,8 @@ const prompts = {
 function render() {
   document.querySelectorAll('[data-save]').forEach(b => { b.disabled = !last[b.dataset.save]; });
   $('calibInfo').textContent = calib ? `${cap(mode)}: full bow = ${calib.fullBowDeg.toFixed(0)}° of forearm sweep` : 'not calibrated';
-  $('refInfo').textContent = refA ? `${teacher.length} takes, ${refA.strokes.length} strokes` : 'none yet';
+  $('refInfo').textContent = (refA ? `${teacher.length} takes, ${refA.strokes.length} strokes` : 'none yet') +
+    (newTeacher && refA ? ' (replaced by the next teacher take)' : '');
   $('connect').textContent = device ? 'MUGIC connected' : 'Connect MUGIC';
   $('connect').classList.toggle('on', !!device);
   $('prompt').textContent = !device ? 'Connect the MUGIC to start.' : `${cap(mode)} ${prompts[nextRole()]}`;
