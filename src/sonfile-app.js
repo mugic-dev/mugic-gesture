@@ -44,6 +44,12 @@ $('teacherName').onchange = () => {   // the name this browser's teacher records
   if (refA && refSource === 'Recorded here') setRefTeacher($('teacherName').value);
   render();
 };
+// Target stroke duration: set by the teacher's slider (refTarget, kept in the reference), else the teacher's average.
+let refTarget = store.get('refTarget') ?? null;
+const tempoText = () => { const { s, tol } = ex.tempo(refA, cfg, refTarget); return `${s.toFixed(1)} s ± ${tol.toFixed(1)}`; };
+const setTarget = v => { refTarget = v; store.set('refTarget', v); log('reference.target', v); render(); };
+$('target').oninput = () => setTarget(+$('target').value);
+$('targetAuto').onclick = () => setTarget(null);
 const last = {};   // latest recording per role, for download
 
 function status(text) { $('status').textContent = text; }
@@ -59,7 +65,8 @@ $('saveRef').onclick = () => {
   const stamp = `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}-${p(d.getHours())}${p(d.getMinutes())}`;   // local time
   const who = refTeacher ? `-${refTeacher.replace(/[^\p{L}\p{N}]+/gu, '-')}` : '';
   download(`${cfg.name}-reference${who}-${stamp}.json`,   // e.g. son_file-reference-MARI-2026-10-18-1530.json
-    { kind: REF_KIND, version: 1, exercise: cfg.name, teacher: refTeacher, created, saved, fullBowDeg: teacherBow, takes: teacher });
+    { kind: REF_KIND, version: 1, exercise: cfg.name, teacher: refTeacher, created, saved, fullBowDeg: teacherBow,
+      strokeTarget: refTarget, strokeSeconds: +ex.tempo(refA, cfg, refTarget).s.toFixed(2), takes: teacher });   // strokeSeconds: informative
   log('reference.save', { teacher: refTeacher, created, saved });
 };
 $('loadRef').onchange = async e => {
@@ -80,7 +87,8 @@ function useReference(data, source) {
   store.set('teacher', teacher); store.set('teacherBow', teacherBow); store.set('refSource', refSource);
   refCreated = data.created ?? null;
   store.set('refCreated', refCreated); setRefTeacher(data.teacher);
-  status(`reference: ${source.toLowerCase()}`);
+  refTarget = data.strokeTarget ?? null; store.set('refTarget', refTarget);
+  status(`reference: ${source.replace(/^./, c => c.toLowerCase())}`);
   render();
 }
 
@@ -89,7 +97,7 @@ function showReference() {
   if (!refA) return;
   const n = teacher.length;
   showResults({ strokes: refA.strokes, turns: refA.turns }, 'teacher',
-    `${refWhere()} · ${n} take${n > 1 ? 's' : ''}` +
+    `${refWhere()} · ${n} take${n > 1 ? 's' : ''} · tempo ${tempoText()} per stroke` +
     (teacherBow ? ` · full bow ≈ ${teacherBow.toFixed(0)}° of forearm sweep` : ''), '', 'Teacher reference');
 }
 $('viewRef').onclick = showReference;
@@ -235,18 +243,25 @@ function render() {
   $('saveRef').disabled = $('viewRef').disabled = !refA;
   $('teacherPanel').hidden = mode !== 'teacher';
   $('studentPanel').hidden = mode !== 'student';
+  const tp = ex.tempo(refA, cfg, refTarget);
+  if (document.activeElement !== $('target')) $('target').value = tp.s;
+  $('targetText').textContent = `${tp.s.toFixed(1)} s ${tp.set ? '(set)' : refA ? '(measured average)' : '(default)'}`;
+  $('targetAuto').disabled = !tp.set;
+  $('tempo').textContent = refA ? `Target: ${tempoText()} per stroke${refTeacher ? ` (${refTeacher}'s tempo)` : ' (the teacher\'s tempo)'}.` : '';
   $('refLine').textContent = refA ? `Scored against ${refTeacher ? `${refTeacher}'s` : 'the teacher'} reference (${refWhere().replace(/^Teacher [^,]*, /, '').replace(/^./, c => c.toLowerCase())}).`
     : 'No teacher reference yet: pick Teacher to record one, or load one there.';
   $('refInfo').innerHTML = (refA
     ? [`${teacher.length} take${teacher.length > 1 ? 's' : ''}`, 'Several strokes',
-      teacherBow && `Full bow ≈ ${teacherBow.toFixed(0)}° of forearm sweep`, refA && refWhere(),
+      refA && `Tempo ${tempoText()} per stroke`, teacherBow && `Full bow ≈ ${teacherBow.toFixed(0)}° of forearm sweep`, refA && refWhere(),
       newTeacher && 'Replaced by the next teacher take']
     : ['None yet']).filter(Boolean).map(x => `<li>${x}</li>`).join('');
   $('connect').textContent = hub.device ? 'MUGIC connected' : 'Connect MUGIC';
   $('connect').classList.toggle('on', !!hub.device);
   $('connect').hidden = framed && !!hub.device;   // the menu's Connect is behind this frame
   $('prompt').textContent = !hub.device ? 'Connect the MUGIC to start.'
-    : `${cap(mode)}: start still at the frog, play sons filés (down-bow first, about 8 s each, as many as you like), then hold still.`;
+    : mode === 'teacher'
+      ? 'Teacher: start still at the frog, play sons filés (down-bow first) at the tempo students should hold, then hold still.'
+      : `Student: start still at the frog, play sons filés (down-bow first, ${tempoText()} each), then hold still.`;
   document.querySelectorAll('[data-mode]').forEach(b => b.classList.toggle('on', b.dataset.mode === mode));
   $('state').textContent = !hub.device ? '' : {
     off: 'OFF: flick to start', arming: 'ON…', resting: 'OFF: take the MUGIC off and lay it down', waiting: 'ON: hold still…', ready: 'ready: play when you like',
@@ -292,7 +307,7 @@ function showResults(a, who, message, note = '', title = `${cap(who)} take`) {
   $('results').hidden = false;
   $('resultTitle').textContent = title;
   $('details').hidden = !ok;
-  const s = student && ok && refA?.strokes.length ? ex.score(a, refA) : null;
+  const s = student && ok && refA?.strokes.length ? ex.score(a, refA, cfg, refTarget) : null;
   $('scoreBox').hidden = !s;
   $('score').textContent = s?.total?.toFixed(1) ?? '–';
   $('coach').textContent = (message ?? (s ? s.coach : ok ? 'Record the teacher first to get a score.' : 'No strokes found.')) + note;
@@ -305,7 +320,7 @@ function showResults(a, who, message, note = '', title = `${cap(who)} take`) {
   $('metrics').innerHTML = s
     ? '<tr><th>Measure</th><th>Student</th><th>Teacher</th><th>Score /10</th></tr>' + s.rows.map(r =>
       `<tr class="${r.bad > 2 ? 'bad' : ''}"><td>${r.label}</td><td>${r.value.toFixed(r.digits)}</td>` +
-      `<td>${r.ref.toFixed(r.digits)}${r.key === 'duration' ? ` ± ${cfg.stroke_s[1]}` : ''}</td><td>${r.score.toFixed(1)}</td></tr>`).join('')
+      `<td>${r.ref.toFixed(r.digits)}${r.tol ? ` ± ${r.tol.toFixed(1)}` : ''}</td><td>${r.score.toFixed(1)}</td></tr>`).join('')
     : '<tr><th>Measure</th><th>Teacher average</th></tr>' + ex.metrics.map(m => {
       const v = mean((m.key === 'turnJerk' ? a.turns ?? [] : a.strokes).map(k => k[m.key]).filter(x => x != null));
       return v == null ? '' : `<tr><td>${m.label}</td><td>${v.toFixed(m.digits)}</td></tr>`;

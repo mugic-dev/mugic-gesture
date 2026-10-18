@@ -7,7 +7,7 @@ import { DEG, apply, clamp, conj, continuous, cross, mul, normalize, reject, toM
 export const config = {
   name: 'son_file', title: 'Son filé', class: 'C', mount: 'bow_forearm',
   window_s: [2, 180],       // a take is cut at the maximum
-  stroke_s: [8, 0.5],       // target stroke duration and tolerance
+  stroke_s: [8, 0.5],       // stroke duration and smallest tolerance; the target is the teacher's tempo when known
   tempo_mandatory: true,    // duration counts in the score
   bow_length_cm: 65,
   forearm_axis: [1, 0, 0],  // device axis lying along the forearm
@@ -186,10 +186,20 @@ export const pool = parts => ({ strokes: parts.flatMap(p => p.strokes), turns: p
 // 0-10 from how many reference spreads worse than the reference: 0 -> 10, 1 -> 9, 2 -> 6.9, 3 -> 5, 6 -> 2.
 export const toTen = z => Math.round(100 / (1 + (z / 3) ** 2)) / 10;
 
+// The stroke duration students are held to: the target the teacher set, else the teacher's average stroke; ± the
+// larger of 10%, stroke_s[1] and (for the average) the teacher's own spread. Without either, stroke_s.
+export function tempo(ref, cfg = config, target = null) {
+  if (target) return { s: target, tol: Math.max(cfg.stroke_s[1], 0.1 * target), teacher: true, set: true };
+  const d = (ref?.strokes ?? []).map(s => s.duration).filter(v => v != null);
+  if (!d.length) return { s: cfg.stroke_s[0], tol: cfg.stroke_s[1], teacher: false };
+  const s = mean(d);
+  return { s, tol: Math.max(cfg.stroke_s[1], std(d), 0.1 * s), teacher: true };
+}
+
 // Score an attempt against a reference (teacher) pool: each metric becomes a z-score against the reference
-// strokes, only worse-than-reference counts; duration is scored against the target. Overall and per-metric
+// strokes, only worse-than-reference counts; duration is scored against the teacher's tempo. Overall and per-metric
 // scores are 0-10 (toTen of the mean / the metric's z); flags at z > 2.
-export function score(att, ref, cfg = config) {
+export function score(att, ref, cfg = config, target = null) {
   const rows = [];
   for (const m of metrics) {
     const a = att.summary[m.key];
@@ -200,10 +210,10 @@ export function score(att, ref, cfg = config) {
   }
   const dur = att.summary.duration;
   if (dur != null) {
-    const [target, tol] = cfg.stroke_s, z = (dur - target) / tol;
-    rows.push({ key: 'duration', label: 'Stroke duration (s)', digits: 1, value: dur, ref: target, z,
+    const { s: goal, tol } = tempo(ref, cfg, target), z = (dur - goal) / tol;
+    rows.push({ key: 'duration', label: 'Stroke duration (s)', digits: 1, value: dur, ref: goal, tol, z,
       bad: cfg.tempo_mandatory ? Math.abs(z) : 0, score: toTen(Math.abs(z)),
-      text: dur < target ? 'Strokes too short' : 'Strokes too long' });
+      text: dur < goal ? 'Strokes too short' : 'Strokes too long' });
   }
   const total = rows.length ? toTen(mean(rows.map(r => r.bad))) : null;
   const flagged = rows.filter(r => r.bad > 2).sort((a, b) => b.bad - a.bad);

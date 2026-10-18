@@ -42,7 +42,9 @@ Motion slower than 1.5°/s can be mistaken for holding still (see `src/takes.js`
 per-stroke measures and stroke shapes of the pooled teacher takes, the teacher's full bow, and its stamp: the
 **Teacher name** typed in the teacher panel and when it was recorded and saved). **Load reference…** replaces the current
 one with such a file, so a teacher trains once and reuses it across students and sessions, or sends it to a
-remote student. A curated file placed at `references/son_file.json` ships with the app and is used whenever the
+remote student. The reference also sets the **target stroke duration** students are held to and are shown: the teacher's
+average stroke by default, or what the teacher sets with the **Target stroke** slider (2-60 s, kept in the file).
+A curated file placed at `references/son_file.json` ships with the app and is used whenever the
 browser has no reference of its own, so no teacher training is needed.
 
 ## Photos

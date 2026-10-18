@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { analyze, calibrate, liveBow, pool, refPart, score, toTen } from '../src/exercises/sonfile.js';
+import { analyze, calibrate, liveBow, pool, refPart, score, tempo, toTen } from '../src/exercises/sonfile.js';
 import { synthBow } from './synth.js';
 
 test('clean bows: strokes, durations and near-zero defects', () => {
@@ -66,4 +66,18 @@ test('live bow position: down-bow toward the tip, back to the frog on the up-bow
   const mid = theta[Math.round(d.t.length / 2)];
   assert.ok(Math.abs(mid - 60) < 3, `tip ${mid}`);
   assert.ok(Math.abs(theta.at(-1)) < 3, `frog ${theta.at(-1)}`);
+});
+
+test('stroke duration is scored against the teacher tempo, not a fixed 8 s', () => {
+  const slow = synthBow({ strokes: 4, strokeS: 16 });
+  const ref = pool([refPart(analyze(slow))]);
+  const t = tempo(ref);
+  assert.ok(t.teacher && Math.abs(t.s - 16) < 1, `tempo ${t.s}`);
+  const row = att => score(analyze(att), ref).rows.find(r => r.key === 'duration');
+  assert.ok(row(synthBow({ strokes: 4, strokeS: 16 })).score >= 9);
+  assert.ok(row(synthBow({ strokes: 4, strokeS: 8 })).score < 3);
+  assert.equal(tempo(null).s, 8);
+  // a target set by the teacher overrides the measured average
+  assert.equal(tempo(ref, undefined, 30).s, 30);
+  assert.ok(score(analyze(synthBow({ strokes: 4, strokeS: 16 })), ref, undefined, 30).rows.find(r => r.key === 'duration').score < 3);
 });
