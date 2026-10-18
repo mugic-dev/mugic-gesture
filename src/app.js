@@ -7,14 +7,18 @@ import { plot } from './plot.js';
 import { takeDetector } from './takes.js';
 import { flickDetector } from './flick.js';
 
-const cfg = ex.config, $ = id => document.getElementById(id);
+const cfg = ex.config, $ = id => document.getElementById(id), cap = w => w[0].toUpperCase() + w.slice(1);
 const store = {
   get: k => { try { return JSON.parse(localStorage.getItem(`mugicGesture.${cfg.name}.${k}`)); } catch (e) { return null; } },
   set: (k, v) => { try { localStorage.setItem(`mugicGesture.${cfg.name}.${k}`, JSON.stringify(v)); } catch (e) {} },
 };
 
 let device = null, mic = null, rec = null, live = null;   // rec: the take being saved
-let calib = store.get('calib'), reference = store.get('reference'), refA = reference && ex.analyze(reference);
+// Who is playing: teacher takes become the reference, student takes are scored. Each has its own calibration
+// (arms differ in how far the forearm sweeps over a full bow).
+let mode = store.get('mode') ?? 'teacher';
+const calibs = { teacher: store.get('calib.teacher'), student: store.get('calib.student') };
+let calib = calibs[mode], reference = store.get('reference'), refA = reference && ex.analyze(reference);
 const last = {};   // latest recording per role, for download
 
 function status(text) { $('status').textContent = text; }
@@ -34,7 +38,10 @@ $('mic').onchange = async e => {
 };
 
 document.querySelectorAll('[data-save]').forEach(b => { b.onclick = () => last[b.dataset.save] && save(last[b.dataset.save]); });
-$('recal').onclick = () => { calib = null; store.set('calib', null); render(); };
+$('recal').onclick = () => { calib = calibs[mode] = null; store.set(`calib.${mode}`, null); render(); };
+document.querySelectorAll('[data-mode]').forEach(b => {
+  b.onclick = () => { mode = b.dataset.mode; calib = calibs[mode]; store.set('mode', mode); render(); };
+});
 
 $('load').onchange = async e => {
   const file = e.target.files[0];
@@ -44,7 +51,7 @@ $('load').onchange = async e => {
 };
 
 // What the next take will be used for.
-const nextRole = () => (!calib ? 'calibration' : !reference || $('asRef').checked ? 'reference' : 'attempt');
+const nextRole = () => (!calib ? 'calibration' : mode === 'teacher' ? 'reference' : 'attempt');
 
 // Short tones so the player knows the state without looking: high = ready, low = take captured,
 // rising pair = ON, falling pair = OFF.
@@ -61,17 +68,18 @@ function beep(...freqs) {
   } catch (e) {}
 }
 
-// Session: 'off' (motion ignored) -> flick -> 'arming' (settle_s) -> 'waiting' / 'ready' / 'moving' -> flick -> 'off'.
-const settle_s = 1, flickCut_s = 0.4;
-let state = 'off', det = null, armAt = 0, now = 0;
+// Session: 'off' (motion ignored) -> flick -> 'arming' (settle_s) -> 'waiting' / 'ready' / 'moving' -> flick ->
+// 'resting' (rest_s: flicks ignored while the player takes the device off and lays it down) -> 'off'.
+const settle_s = 1, flickCut_s = 0.4, rest_s = 10;
+let state = 'off', det = null, armAt = 0, restUntil = 0, now = 0;
 const flick = flickDetector();
 
 function turnOn(t) { state = 'arming'; armAt = t + settle_s; beep(660, 990); render(); }
 function turnOff(t) {
   det?.stop(t - flickCut_s);
-  det = null; live = null; state = 'off'; beep(990, 660); render();
+  det = null; live = null; state = 'resting'; restUntil = t + rest_s; beep(990, 660); render();
 }
-$('power').onclick = () => (state === 'off' ? turnOn(now) : turnOff(now));
+$('power').onclick = () => (state === 'off' || state === 'resting' ? turnOn(now) : turnOff(now));
 
 function onTake(e, take) {
   state = e === 'start' ? 'moving' : e === 'cancel' ? state : 'ready';
@@ -84,7 +92,7 @@ function onTake(e, take) {
     beep(440);
     live = null;
     const role = nextRole();
-    rec = newRecording({ exercise: cfg.name, class: cfg.class, mount: cfg.mount, role, performer: 'me' },
+    rec = newRecording({ exercise: cfg.name, class: cfg.class, mount: cfg.mount, role, performer: mode },
       [{ id: device.id, mount: cfg.mount }]);
     if (role !== 'calibration') rec.calib = calib;
     if (mic) rec.extra.mic_rms = take.map(r => r.sample.mic);
@@ -98,9 +106,10 @@ function onTake(e, take) {
 function onSample(s, t) {
   now = t;
   if (mic) s.mic = mic.rms();
+  if (state === 'resting' && t >= restUntil) { state = 'off'; render(); }
   if (flick(s.acc, t)) {
     if (state === 'off') turnOn(t);
-    else if (state !== 'arming') turnOff(t);
+    else if (state !== 'arming' && state !== 'resting') turnOff(t);
     return;
   }
   if (state === 'arming' && t >= armAt) {
@@ -120,7 +129,7 @@ function finish(r) {
   last[r.role] = r;
   try {
     if (r.role === 'calibration') {
-      calib = ex.calibrate(r); store.set('calib', calib);
+      calib = calibs[mode] = ex.calibrate(r); store.set(`calib.${mode}`, calib);
     } else if (r.role === 'reference') {
       const a = ex.analyze(r);
       if (!a.strokes.length) throw new Error('Take ignored: no strokes found.');
@@ -128,36 +137,37 @@ function finish(r) {
     } else {
       showResults(ex.analyze(r));
     }
-    if (r.role === 'reference') $('asRef').checked = false;
   } catch (e) { status(e.message); }
   render();
 }
 
 const prompts = {
-  calibration: 'Calibration: hold the bow still at the frog, then play one slow full down-bow and hold still at the tip.',
-  reference: 'Reference: hold still at the frog, play four sons filés (down, up, down, up, about 8 s each), then hold still.',
+  calibration: 'calibration: hold the bow still at the frog, then play one slow full down-bow and hold still at the tip.',
+  reference: 'reference: hold still at the frog, play four sons filés (down, up, down, up, about 8 s each), then hold still.',
   attempt: 'Attempt: hold still at the frog, play the same four strokes, then hold still.',
 };
 
 function render() {
   document.querySelectorAll('[data-save]').forEach(b => { b.disabled = !last[b.dataset.save]; });
-  $('calibInfo').textContent = calib ? `full bow = ${calib.fullBowDeg.toFixed(0)}° of forearm sweep` : 'not calibrated';
+  $('calibInfo').textContent = calib ? `${cap(mode)}: full bow = ${calib.fullBowDeg.toFixed(0)}° of forearm sweep` : 'not calibrated';
   $('refInfo').textContent = refA ? `${refA.strokes.length} strokes, ${refA.summary.duration?.toFixed(1) ?? '–'} s each` : 'none yet';
   $('connect').textContent = device ? 'MUGIC connected' : 'Connect MUGIC';
   $('connect').classList.toggle('on', !!device);
-  $('prompt').textContent = !device ? 'Connect the MUGIC to start.' : prompts[nextRole()];
+  $('prompt').textContent = !device ? 'Connect the MUGIC to start.' : `${cap(mode)} ${prompts[nextRole()]}`;
+  document.querySelectorAll('[data-mode]').forEach(b => b.classList.toggle('on', b.dataset.mode === mode));
   $('state').textContent = !device ? '' : {
-    off: 'OFF: flick to start', arming: 'ON…', waiting: 'ON: hold still…', ready: 'ready: play when you like',
+    off: 'OFF: flick to start', arming: 'ON…', resting: 'OFF: take the MUGIC off and lay it flat', waiting: 'ON: hold still…', ready: 'ready: play when you like',
     moving: '● recording',
   }[state];
   $('state').className = state;
-  $('power').textContent = state === 'off' ? 'Turn ON' : 'Turn OFF';
+  $('power').textContent = state === 'off' || state === 'resting' ? 'Turn ON' : 'Turn OFF';
   $('power').disabled = !device;
   $('live').hidden = !live;
 }
 
 const span = 10;   // seconds of live trace shown
 (function tick() {
+  if (state === 'resting') $('state').textContent = `OFF: take the MUGIC off and lay it flat (${Math.max(0, Math.ceil(restUntil - now))} s)`;
   if (live?.t.length) {
     const t1 = live.t[live.t.length - 1], i = live.t.findIndex(t => t > t1 - span), x = live.t.slice(i);
     $('elapsed').textContent = `${t1.toFixed(1)} s`;
@@ -177,7 +187,7 @@ function showResults(a) {
   if (!a.strokes.length) { $('score').textContent = '–'; $('coach').textContent = 'No strokes found.'; return; }
   const s = refA?.strokes.length ? ex.score(a, refA) : null;
   $('score').textContent = s?.total ?? '–';
-  $('coach').textContent = s ? s.coach : 'Record a reference to get a score.';
+  $('coach').textContent = s ? s.coach : 'Record the teacher first to get a score.';
   $('metrics').innerHTML = '<tr><th>Measure</th><th>You</th><th>Reference</th><th>z</th></tr>' + (s ? s.rows : []).map(r =>
     `<tr class="${r.bad > 2 ? 'bad' : ''}"><td>${r.label}</td><td>${r.value.toFixed(r.digits)}</td>` +
     `<td>${r.ref.toFixed(r.digits)}${r.key === 'duration' ? ` ± ${cfg.stroke_s[1]}` : ''}</td><td>${r.z.toFixed(1)}</td></tr>`).join('');

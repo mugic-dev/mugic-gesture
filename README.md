@@ -14,14 +14,18 @@ Web Bluetooth needs Chrome/Edge and a secure origin (`localhost` counts). The MU
 
 ## Hands-free
 
-After Connect the app is OFF and ignores motion (scrolling, adjusting). A flick (acceleration spike) turns it
-ON (rising beeps; 1 s to settle) and another flick turns it OFF (falling beeps); there is also an ON/OFF button.
-While ON, holding still (orientation within 1.5° for 2 s) gets ready (high beep), moving starts a take, holding
-still again ends it (low beep) and gets ready for the next. The OFF flick keeps a take in progress up to 0.4 s
-before the flick, or drops it when it has less than 1 s of motion (the flick itself).
+Pick **Teacher** or **Student** before playing (buttons). Teacher takes become the reference (the latest
+replaces it); student takes are scored against it. Each has its own calibration: the first take of a role
+without one is that player's calibration (one slow full down-bow, frog to tip).
 
-The first take is the calibration (one slow full down-bow, frog to tip), the next becomes the reference, later
-ones are scored attempts. Motion slower than 1.5°/s can be mistaken for holding still (see `src/takes.js`).
+After Connect the app is OFF and ignores motion (scrolling, adjusting). A flick (acceleration spike) turns it
+ON (rising beeps; 1 s to settle). While ON, holding still (orientation within 1.5° for 2 s) gets ready (high
+beep), moving starts a take, holding still again ends it (low beep) and gets ready for the next. Another flick
+turns it OFF (falling beeps): a take in progress is kept up to 0.4 s before the flick, or dropped when it has
+less than 1 s of motion (the flick itself). After OFF, flicks are ignored for 10 s so the player can take the
+MUGIC off and lay it down. The ON/OFF button does the same as the flick.
+
+Motion slower than 1.5°/s can be mistaken for holding still (see `src/takes.js`).
 
 ## Layout
 

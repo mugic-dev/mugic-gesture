@@ -20,10 +20,14 @@
   <main>
     <section class="now">
       <p id="prompt"></p>
-      <div class="row"><b id="state"></b><button id="power">Turn ON</button></div>
+      <div class="row">
+        <span class="seg"><button data-mode="teacher">Teacher</button><button data-mode="student">Student</button></span>
+        <button id="power">Turn ON</button><b id="state"></b>
+      </div>
       <p class="hint">Strap the MUGIC on the bow-arm forearm, just above the wrist. Flick to turn ON (rising beeps),
         hold still for 2 s to get ready (high beep), play, hold still again to end the take (low beep). Flick again
-        to turn OFF (falling beeps) before moving freely.</p>
+        to turn OFF (falling beeps); flicks are then ignored for 10 s so the MUGIC can be taken off and laid flat.
+        Teacher takes become the reference; student takes are scored against it.</p>
     </section>
 
     <section class="steps">
@@ -33,12 +37,12 @@
           <button data-save="calibration">Download</button></div>
       </article>
       <article>
-        <h2>Reference</h2>
-        <div class="row"><span id="refInfo"></span><label><input type="checkbox" id="asRef"> next take is the reference</label>
+        <h2>Reference (teacher)</h2>
+        <div class="row"><span id="refInfo"></span>
           <button data-save="reference">Download</button></div>
       </article>
       <article>
-        <h2>Attempt</h2>
+        <h2>Attempt (student)</h2>
         <div class="row"><button data-save="attempt">Download last</button></div>
       </article>
     </section>
@@ -55,7 +59,7 @@
     <section id="results" hidden>
       <div class="score"><b id="score">–</b><p id="coach"></p></div>
       <table id="metrics"></table>
-      <h3><span class="k1">Reference</span> vs <span class="k2">your</span> bow speed over each stroke</h3>
+      <h3><span class="k1">Teacher</span> vs <span class="k2">student</span> bow speed over each stroke</h3>
       <canvas id="profile"></canvas>
       <h3><span class="k2">Off-plane</span> and <span class="k3">tilt</span> over the recording (°)</h3>
       <canvas id="trace"></canvas>
