@@ -153,8 +153,16 @@ export function calibrate(rec, cfg = config) {
   return { axis, fullBowDeg, conj: vdot(turn.slice(1), axis) * turn[0] < 0 };
 }
 
-// Score an attempt against a reference (teacher) analysis: each metric becomes a z-score against the reference
-// strokes, only worse-than-reference counts; duration is scored against the target. 0-100, flags at z > 2.
+// Teacher strokes kept for the reference (no sample indices), and the pool of several teacher takes.
+export const refPart = a => ({ strokes: a.strokes.map(({ i0, i1, ...k }) => k), turns: a.turns });
+export const pool = parts => ({ strokes: parts.flatMap(p => p.strokes), turns: parts.flatMap(p => p.turns) });
+
+// 0-10 from how many reference spreads worse than the reference: 0 -> 10, 1 -> 9, 2 -> 6.9, 3 -> 5, 6 -> 2.
+export const toTen = z => Math.round(100 / (1 + (z / 3) ** 2)) / 10;
+
+// Score an attempt against a reference (teacher) pool: each metric becomes a z-score against the reference
+// strokes, only worse-than-reference counts; duration is scored against the target. Overall and per-metric
+// scores are 0-10 (toTen of the mean / the metric's z); flags at z > 2.
 export function score(att, ref, cfg = config) {
   const rows = [];
   for (const m of metrics) {
@@ -162,15 +170,16 @@ export function score(att, ref, cfg = config) {
     const vals = (m.key === 'turnJerk' ? ref.turns : ref.strokes).map(s => s[m.key]).filter(v => v != null);
     if (a == null || !vals.length) continue;
     const r = mean(vals), z = (a - r) / Math.max(std(vals), m.floor, 0.15 * Math.abs(r));
-    rows.push({ ...m, value: a, ref: r, z, bad: Math.max(0, z) });
+    rows.push({ ...m, value: a, ref: r, z, bad: Math.max(0, z), score: toTen(Math.max(0, z)) });
   }
   const dur = att.summary.duration;
   if (dur != null) {
     const [target, tol] = cfg.stroke_s, z = (dur - target) / tol;
     rows.push({ key: 'duration', label: 'Stroke duration (s)', digits: 1, value: dur, ref: target, z,
-      bad: cfg.tempo_mandatory ? Math.abs(z) : 0, text: dur < target ? 'Strokes too short' : 'Strokes too long' });
+      bad: cfg.tempo_mandatory ? Math.abs(z) : 0, score: toTen(Math.abs(z)),
+      text: dur < target ? 'Strokes too short' : 'Strokes too long' });
   }
-  const total = rows.length ? clamp(Math.round(100 - 15 * mean(rows.map(r => r.bad))), 0, 100) : null;
+  const total = rows.length ? toTen(mean(rows.map(r => r.bad))) : null;
   const flagged = rows.filter(r => r.bad > 2).sort((a, b) => b.bad - a.bad);
   const coach = flagged.length
     ? flagged.slice(0, 2).map(r => `${r.text}: ${r.value.toFixed(r.digits)} vs ${r.ref.toFixed(r.digits)}`).join('. ') + '.'

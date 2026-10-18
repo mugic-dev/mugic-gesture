@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { analyze, calibrate, score } from '../src/exercises/sonfile.js';
+import { analyze, calibrate, pool, refPart, score, toTen } from '../src/exercises/sonfile.js';
 import { synthBow } from './synth.js';
 
 test('clean bows: strokes, durations and near-zero defects', () => {
@@ -27,12 +27,19 @@ test('calibration finds the full-bow sweep and down-bow direction', () => {
   assert.ok(c.axis[1] > 0.99);
 });
 
-test('score flags the defect against a clean reference', () => {
-  const ref = analyze(synthBow());
-  assert.equal(score(ref, ref).flagged.length, 0);
+test('0-10 scale', () => {
+  assert.deepEqual([0, 1, 2, 3, 6].map(toTen), [10, 9, 6.9, 5, 2]);
+});
+
+test('score flags the defect against a pooled clean reference', () => {
+  const ref = pool([refPart(analyze(synthBow())), refPart(analyze(synthBow({ strokes: 2 })))]);
+  assert.equal(ref.strokes.length, 6);
+  const clean = score(analyze(synthBow()), ref);
+  assert.equal(clean.flagged.length, 0);
+  assert.ok(clean.total >= 9.5, `clean ${clean.total}`);
   const s = score(analyze(synthBow({ wobble: 4 })), ref);
   assert.deepEqual(s.flagged.map(r => r.key), ['tiltStd']);
-  assert.ok(s.total < score(ref, ref).total);
+  assert.ok(s.total < clean.total);
   assert.match(s.coach, /tilt/);
 });
 

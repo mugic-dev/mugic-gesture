@@ -38,8 +38,8 @@
       </article>
       <article>
         <h2>Reference (teacher)</h2>
-        <div class="row"><span id="refInfo"></span>
-          <button data-save="reference">Download</button></div>
+        <div class="row"><span id="refInfo"></span><button id="clearRef">Clear teacher</button>
+          <button data-save="reference">Download last</button></div>
       </article>
       <article>
         <h2>Attempt (student)</h2>
@@ -57,7 +57,7 @@
     </section>
 
     <section id="results" hidden>
-      <div class="score"><b id="score">–</b><p id="coach"></p></div>
+      <div class="score"><b id="score">–</b><span>/ 10</span><p id="coach"></p></div>
       <table id="metrics"></table>
       <h3><span class="k1">Teacher</span> vs <span class="k2">student</span> bow speed over each stroke</h3>
       <canvas id="profile"></canvas>

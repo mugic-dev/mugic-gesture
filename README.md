@@ -14,8 +14,9 @@ Web Bluetooth needs Chrome/Edge and a secure origin (`localhost` counts). The MU
 
 ## Hands-free
 
-Pick **Teacher** or **Student** before playing (buttons). Teacher takes become the reference (the latest
-replaces it); student takes are scored against it. Each has its own calibration: the first take of a role
+Pick **Teacher** or **Student** before playing (buttons). Every teacher take adds its strokes to the reference
+pool (any number of takes and strokes, until **Clear teacher**); student takes are scored against the pool,
+0-10 overall and per measure: `10 / (1 + (z/3)²)`, z = how many teacher spreads worse than the teacher. Each has its own calibration: the first take of a role
 without one is that player's calibration (one slow full down-bow, frog to tip).
 
 After Connect the app is OFF and ignores motion (scrolling, adjusting). A flick (acceleration spike) turns it

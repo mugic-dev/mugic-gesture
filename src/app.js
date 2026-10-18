@@ -18,7 +18,8 @@ let device = null, mic = null, rec = null, live = null;   // rec: the take being
 // (arms differ in how far the forearm sweeps over a full bow).
 let mode = store.get('mode') ?? 'teacher';
 const calibs = { teacher: store.get('calib.teacher'), student: store.get('calib.student') };
-let calib = calibs[mode], reference = store.get('reference'), refA = reference && ex.analyze(reference);
+// The reference pools every teacher take (strokes and bow changes only) until Clear teacher.
+let calib = calibs[mode], teacher = store.get('teacher') ?? [], refA = teacher.length ? ex.pool(teacher) : null;
 const last = {};   // latest recording per role, for download
 
 function status(text) { $('status').textContent = text; }
@@ -38,6 +39,7 @@ $('mic').onchange = async e => {
 };
 
 document.querySelectorAll('[data-save]').forEach(b => { b.onclick = () => last[b.dataset.save] && save(last[b.dataset.save]); });
+$('clearRef').onclick = () => { teacher = []; refA = null; store.set('teacher', teacher); render(); };
 $('recal').onclick = () => { calib = calibs[mode] = null; store.set(`calib.${mode}`, null); render(); };
 document.querySelectorAll('[data-mode]').forEach(b => {
   b.onclick = () => { mode = b.dataset.mode; calib = calibs[mode]; store.set('mode', mode); render(); };
@@ -133,7 +135,7 @@ function finish(r) {
     } else if (r.role === 'reference') {
       const a = ex.analyze(r);
       if (!a.strokes.length) throw new Error('Take ignored: no strokes found.');
-      reference = r; refA = a; store.set('reference', r);
+      teacher.push(ex.refPart(a)); refA = ex.pool(teacher); store.set('teacher', teacher);
     } else {
       showResults(ex.analyze(r));
     }
@@ -143,14 +145,14 @@ function finish(r) {
 
 const prompts = {
   calibration: 'calibration: hold the bow still at the frog, then play one slow full down-bow and hold still at the tip.',
-  reference: 'reference: hold still at the frog, play four sons filés (down, up, down, up, about 8 s each), then hold still.',
+  reference: 'take: hold still at the frog, play sons filés (about 8 s each, as many as you like), then hold still.',
   attempt: 'Attempt: hold still at the frog, play the same four strokes, then hold still.',
 };
 
 function render() {
   document.querySelectorAll('[data-save]').forEach(b => { b.disabled = !last[b.dataset.save]; });
   $('calibInfo').textContent = calib ? `${cap(mode)}: full bow = ${calib.fullBowDeg.toFixed(0)}° of forearm sweep` : 'not calibrated';
-  $('refInfo').textContent = refA ? `${refA.strokes.length} strokes, ${refA.summary.duration?.toFixed(1) ?? '–'} s each` : 'none yet';
+  $('refInfo').textContent = refA ? `${teacher.length} takes, ${refA.strokes.length} strokes` : 'none yet';
   $('connect').textContent = device ? 'MUGIC connected' : 'Connect MUGIC';
   $('connect').classList.toggle('on', !!device);
   $('prompt').textContent = !device ? 'Connect the MUGIC to start.' : `${cap(mode)} ${prompts[nextRole()]}`;
@@ -186,11 +188,11 @@ function showResults(a) {
   out.hidden = false;
   if (!a.strokes.length) { $('score').textContent = '–'; $('coach').textContent = 'No strokes found.'; return; }
   const s = refA?.strokes.length ? ex.score(a, refA) : null;
-  $('score').textContent = s?.total ?? '–';
+  $('score').textContent = s?.total?.toFixed(1) ?? '–';
   $('coach').textContent = s ? s.coach : 'Record the teacher first to get a score.';
-  $('metrics').innerHTML = '<tr><th>Measure</th><th>You</th><th>Reference</th><th>z</th></tr>' + (s ? s.rows : []).map(r =>
+  $('metrics').innerHTML = '<tr><th>Measure</th><th>Student</th><th>Teacher</th><th>Score /10</th></tr>' + (s ? s.rows : []).map(r =>
     `<tr class="${r.bad > 2 ? 'bad' : ''}"><td>${r.label}</td><td>${r.value.toFixed(r.digits)}</td>` +
-    `<td>${r.ref.toFixed(r.digits)}${r.key === 'duration' ? ` ± ${cfg.stroke_s[1]}` : ''}</td><td>${r.z.toFixed(1)}</td></tr>`).join('');
+    `<td>${r.ref.toFixed(r.digits)}${r.key === 'duration' ? ` ± ${cfg.stroke_s[1]}` : ''}</td><td>${r.score.toFixed(1)}</td></tr>`).join('');
   const f = (v, d) => (v == null ? '–' : v.toFixed(d));
   $('strokes').innerHTML = '<tr><th>#</th><th>Bow</th><th>Time (s)</th><th>Bow used</th><th>Speed (cm/s)</th><th>Speed CV</th><th>Off-plane (°)</th><th>Tilt (°)</th><th>Loudness CV</th></tr>' +
     a.strokes.map((k, i) => `<tr><td>${i + 1}</td><td>${k.dir > 0 ? 'down' : 'up'}</td><td>${f(k.duration, 1)}</td>` +
@@ -207,5 +209,4 @@ function showResults(a) {
   plot($('trace'), [{ x: a.t, y: a.ang.map(g => g.off), color: '--c2' }, { x: a.t, y: a.ang.map(g => g.tilt), color: '--c3' }]);
 }
 
-if (reference) last.reference = reference;
 render();
