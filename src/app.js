@@ -156,7 +156,7 @@ function finish(r) {
 
 function render() {
   document.querySelectorAll('[data-save]').forEach(b => { b.disabled = !last[b.dataset.save]; });
-  $('refInfo').textContent = (refA ? `${teacher.length} take${teacher.length > 1 ? 's' : ''}, ${refA.strokes.length} strokes, full bow ≈ ${teacherBow?.toFixed(0)}° of forearm sweep` : 'none yet') +
+  $('refInfo').textContent = (refA ? `${teacher.length} take${teacher.length > 1 ? 's' : ''}, ${refA.strokes.length} strokes${teacherBow ? `, full bow ≈ ${teacherBow.toFixed(0)}° of forearm sweep` : ''}` : 'none yet') +
     (newTeacher && refA ? ' (replaced by the next teacher take)' : '');
   $('connect').textContent = device ? 'MUGIC connected' : 'Connect MUGIC';
   $('connect').classList.toggle('on', !!device);
