@@ -50,6 +50,28 @@ export function bowAxis(gyro) {
   return gyro.reduce((s, g) => s + vdot(g, v), 0) < 0 ? v.map(x => -x) : v;
 }
 
+// Bow position while playing, before any calibration: the rotation axis is re-estimated from the gyro so far,
+// signed so that the first motion (a down-bow from the frog) is positive, and the bow angle (°) is the gyro
+// integrated along it. Returns update(gyro, dt) -> { axis, u (°/s along the axis), theta }.
+export function liveBow(cfg = config) {
+  const C = [[0, 0, 0], [0, 0, 0], [0, 0, 0]];
+  let axis = [1, 0.9, 0.8], ref = null, theta = 0;
+  return (g, dt) => {
+    for (let i = 0; i < 3; ++i) {
+      for (let j = 0; j < 3; ++j) C[i][j] += g[i] * g[j];
+    }
+    for (let k = 0; k < 5; ++k) {
+      const v = apply(C, axis);
+      if (Math.hypot(...v) > 0) axis = vnormalize(v);
+    }
+    if (!ref && Math.abs(vdot(g, axis)) > cfg.reversal_dps) ref = axis.map(x => x * Math.sign(vdot(g, axis)));
+    if (ref && vdot(axis, ref) < 0) axis = axis.map(x => -x);
+    const u = ref ? vdot(g, axis) : 0;
+    theta += u * dt;
+    return { axis, u, theta };
+  };
+}
+
 // Body-frame axes: the bow rotation axis, the forearm direction (perpendicular to it) and their cross product.
 export function frame(axis, cfg = config) {
   const along = vnormalize(reject(cfg.forearm_axis, axis));

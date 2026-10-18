@@ -1,7 +1,7 @@
 import { connect } from './device.js';
 import { openMic } from './mic.js';
 import { addSample, newRecording, save } from './recording.js';
-import { normalize, vdot } from './quat.js';
+import { DEG, geodesic, normalize } from './quat.js';
 import * as ex from './exercises/sonfile.js';
 import { plot } from './plot.js';
 import { takeDetector } from './takes.js';
@@ -75,9 +75,11 @@ function beep(...freqs) {
 }
 
 // Session: 'off' (motion ignored) -> flick -> 'arming' (settle_s) -> 'waiting' / 'ready' / 'moving' -> flick ->
-// 'resting' (rest_s: flicks ignored while the player takes the device off and lays it down) -> 'off'.
-const settle_s = 1, flickCut_s = 0.4, rest_s = 10;
-let state = 'off', det = null, armAt = 0, restUntil = 0, now = 0;
+// 'resting' (flicks ignored while the player takes the device off and lays it down: at least rest_s, and until
+// it has been still for still_s) -> 'off'.
+const settle_s = 1, flickCut_s = 0.4, rest_s = 10, still_s = 2, still_deg = 1.5;
+let state = 'off', det = null, armAt = 0, restUntil = 0, now = 0, endedAt = -1;
+let calm = null;   // { q, t }: orientation and time since which the device has been still
 const flick = flickDetector();
 
 function turnOn(t) { state = 'arming'; armAt = t + settle_s; beep(660, 990); render(); }
@@ -89,13 +91,13 @@ $('power').onclick = () => (state === 'off' || state === 'resting' ? turnOn(now)
 
 function onTake(e, take) {
   state = e === 'start' ? 'moving' : e === 'cancel' ? state : 'ready';
-  if (e === 'ready') beep(880);
+  if (e === 'ready' && now !== endedAt) beep(880);   // no ready beep right after the take-saved beep
   if (e === 'start') {
-    live = { q0: null, f: ex.frame(calib?.axis ?? [0, 0, 1]), t: [], speed: [], off: [], tilt: [], sweep: 0 };
+    live = { q0: null, bow: ex.liveBow(), lastT: null, t: [], speed: [], off: [], tilt: [], theta: 0 };
   }
   if (e === 'cancel') live = null;
   if (e === 'end') {
-    beep(440);
+    beep(440); endedAt = now;
     live = null;
     rec = newRecording({ exercise: cfg.name, class: cfg.class, mount: cfg.mount, role: roleOf(mode), performer: mode },
       [{ id: device.id, mount: cfg.mount }]);
@@ -110,7 +112,9 @@ function onTake(e, take) {
 function onSample(s, t) {
   now = t;
   if (mic) s.mic = mic.rms();
-  if (state === 'resting' && t >= restUntil) { state = 'off'; render(); }
+  const q = normalize(s.q);
+  if (!calm || geodesic(q, calm.q) * DEG > still_deg) calm = { q, t };
+  if (state === 'resting' && t >= restUntil && t - calm.t >= still_s) { state = 'off'; render(); }
   if (flick(s.acc, t)) {
     if (state === 'off') turnOn(t);
     else if (state !== 'arming' && state !== 'resting') turnOff(t);
@@ -122,11 +126,12 @@ function onSample(s, t) {
   if (!det) return;
   det.feed(s, t);
   if (!live) return;
-  const q = normalize(ex.orient(s.q, calib));
-  live.q0 ??= q;
-  const a = ex.angles(live.q0, q, live.f), lt = t - (live.tStart ??= t);
-  live.t.push(lt); live.speed.push(vdot(s.gyro, live.f.axis)); live.off.push(a.off); live.tilt.push(a.tilt);
-  live.sweep = a.sweep;
+  const b = live.bow(s.gyro, live.lastT == null ? 0 : t - live.lastT), qo = normalize(ex.orient(s.q, calib));
+  live.lastT = t;
+  live.q0 ??= qo;
+  const a = ex.angles(live.q0, qo, ex.frame(b.axis)), lt = t - (live.tStart ??= t);
+  live.t.push(lt); live.speed.push(b.u); live.off.push(a.off); live.tilt.push(a.tilt);
+  live.theta = b.theta;
 }
 
 // Calibrate, analyze and report a finished (or loaded) take; every take ends with the result card.
@@ -164,7 +169,7 @@ function render() {
     : `${cap(mode)}: start still at the frog, play sons filés (down-bow first, about 8 s each, as many as you like), then hold still.`;
   document.querySelectorAll('[data-mode]').forEach(b => b.classList.toggle('on', b.dataset.mode === mode));
   $('state').textContent = !device ? '' : {
-    off: 'OFF: flick to start', arming: 'ON…', resting: 'OFF: take the MUGIC off and lay it flat', waiting: 'ON: hold still…', ready: 'ready: play when you like',
+    off: 'OFF: flick to start', arming: 'ON…', resting: 'OFF: take the MUGIC off and lay it down', waiting: 'ON: hold still…', ready: 'ready: play when you like',
     moving: '● recording',
   }[state];
   $('state').className = state;
@@ -175,15 +180,17 @@ function render() {
 
 const span = 10;   // seconds of live trace shown
 (function tick() {
-  if (state === 'resting') $('state').textContent = `OFF: take the MUGIC off and lay it flat (${Math.max(0, Math.ceil(restUntil - now))} s)`;
+  if (state === 'resting') {
+    const left = Math.ceil(restUntil - now);
+    $('state').textContent = `OFF: take the MUGIC off and lay it down (${left > 0 ? `${left} s` : 'waiting for it to be still'})`;
+  }
   if (live?.t.length) {
     const t1 = live.t[live.t.length - 1], i = live.t.findIndex(t => t > t1 - span), x = live.t.slice(i);
     $('elapsed').textContent = `${t1.toFixed(1)} s`;
     plot($('liveSpeed'), [{ x, y: live.speed.slice(i), color: '--c1' }], { xmin: t1 - span, xmax: t1 });
     plot($('liveAngles'), [{ x, y: live.off.slice(i), color: '--c2' }, { x, y: live.tilt.slice(i), color: '--c3' }],
       { xmin: t1 - span, xmax: t1, ymin: -10, ymax: 10 });
-    $('bow').hidden = !calib;   // no bow size until calibrated
-    const pos = calib ? Math.min(1, Math.max(0, live.sweep / calib.fullBowDeg)) : 0;
+    const pos = Math.min(1, Math.max(0, live.theta / (teacherBow ?? 60)));   // ~60° until the teacher has played
     $('bowPos').style.left = `${(1 - pos) * 100}%`;   // tip on the left, frog on the right
   }
   requestAnimationFrame(tick);

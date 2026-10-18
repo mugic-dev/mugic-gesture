@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { analyze, calibrate, pool, refPart, score, toTen } from '../src/exercises/sonfile.js';
+import { analyze, calibrate, liveBow, pool, refPart, score, toTen } from '../src/exercises/sonfile.js';
 import { synthBow } from './synth.js';
 
 test('clean bows: strokes, durations and near-zero defects', () => {
@@ -58,4 +58,12 @@ test('down-bow sweeps toward the tip whichever way the device quaternion turns',
     const a = analyze({ ...device(), calib });
     assert.ok(a.ang[a.strokes[0].i1].sweep > 50, `flip ${flip}: sweep ${a.ang[a.strokes[0].i1].sweep}`);
   }
+});
+
+test('live bow position: down-bow toward the tip, back to the frog on the up-bow, with no calibration', () => {
+  const d = synthBow({ strokes: 2, axis: [0.6, 0, 0.8], along: [0.8, 0, -0.6] }).devices[0], bow = liveBow();
+  const theta = d.t.map((t, i) => bow(d.gyro[i], i ? t - d.t[i - 1] : 0).theta);
+  const mid = theta[Math.round(d.t.length / 2)];
+  assert.ok(Math.abs(mid - 60) < 3, `tip ${mid}`);
+  assert.ok(Math.abs(theta.at(-1)) < 3, `frog ${theta.at(-1)}`);
 });
