@@ -33,6 +33,8 @@ button, .file {
 button:hover:not(:disabled), .file:hover { background: var(--cream); }
 button:disabled { opacity: 0.4; cursor: default; }
 .file input { display: none; }
+button.small { font-size: 12px; padding: 3px 12px; }
+.banner button.small { background: transparent; color: #e6e3ee; border-color: #e6e3ee; }
 
 /* Connect MUGIC: red until connected, then green (as in the arcade) */
 .connect { background: var(--red); border-color: var(--red); color: #fff; font-weight: 600; }

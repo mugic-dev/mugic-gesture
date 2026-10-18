@@ -25,6 +25,7 @@
     <div class="connect-bar">
       <button id="connect" class="connect">Connect MUGIC</button>
       <span id="status">not connected: connect once, it stays connected from gesture to gesture</span>
+      <button id="downloadLog" class="small">Download log</button>
     </div>
     <div class="cards" id="cards"></div>
     <p class="hint center">Needs a MUGIC in BLE output mode (firmware ≥ 2.2.0) and Chrome or Edge on a computer or
@@ -62,7 +63,8 @@
       </div>`).join('');
 
     const { hub } = getHub();
-    $('connect').onclick = () => hub.connect().catch(e => { $('status').textContent = e.message; });
+    $('connect').onclick = () => hub.connect().catch(e => { $('status').textContent = `${e.name}: ${e.message}`; });
+    $('downloadLog').onclick = () => hub.downloadLog();
     hub.subscribe({ status() {
       $('connect').classList.toggle('on', !!hub.device);
       $('connect').textContent = hub.device ? 'MUGIC connected' : 'Connect MUGIC';

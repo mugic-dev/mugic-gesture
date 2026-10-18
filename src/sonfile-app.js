@@ -14,6 +14,13 @@ const store = {
 };
 
 const { hub, framed } = getHub();   // in the menu's frame: its connection
+const log = (event, data) => hub.log(event, data, 'sonfile');
+if (framed) {   // the menu's hub only sees its own page's errors
+  addEventListener('error', e => log('js.error', { message: e.message, at: `${e.filename}:${e.lineno}` }));
+  addEventListener('unhandledrejection', e => log('js.rejection', String(e.reason)));
+}
+log('page.open', { framed });
+$('downloadLog').onclick = () => hub.downloadLog();
 let mic = null, rec = null, live = null;   // rec: the take being saved
 // Who is playing: teacher takes become the reference, student takes are scored against it right away. There is
 // no calibration step: each take finds its own bow direction, and the teacher's largest stroke is the full bow
@@ -39,7 +46,7 @@ $('loadRef').onchange = async e => {
   const file = e.target.files[0];
   e.target.value = '';
   if (!file) return;
-  try { useReference(JSON.parse(await file.text()), `Loaded from ${file.name}`); } catch (err) { status(`${file.name}: ${err.message}`); }
+  try { useReference(JSON.parse(await file.text()), `Loaded from ${file.name}`); } catch (err) { log('reference.error', err.message); status(`${file.name}: ${err.message}`); }
 };
 
 function useReference(data, source) {
@@ -48,6 +55,7 @@ function useReference(data, source) {
   }
   teacher = data.takes; teacherBow = data.fullBowDeg ?? null; refA = ex.pool(teacher); newTeacher = false;
   refSource = source;
+  log('reference.use', { source, takes: teacher.length, fullBowDeg: teacherBow });
   if (!modePicked) mode = 'student';   // e.g. the built-in reference arrived after the page opened in Teacher
   store.set('teacher', teacher); store.set('teacherBow', teacherBow); store.set('refSource', refSource);
   status(`reference: ${source.toLowerCase()}`);
@@ -61,7 +69,7 @@ if (!teacher.length) {
     .catch(() => {});
 }
 
-$('connect').onclick = () => hub.connect().catch(e => status(e.message));
+$('connect').onclick = () => hub.connect().catch(e => status(`${e.name}: ${e.message}`));
 
 $('mic').onchange = async e => {
   if (e.target.checked) {
@@ -73,6 +81,7 @@ document.querySelectorAll('[data-save]').forEach(b => { b.onclick = () => last[b
 document.querySelectorAll('[data-mode]').forEach(b => {
   b.onclick = () => {
     mode = b.dataset.mode; modePicked = true;
+    log('mode', mode);
     if (shownFor !== mode) $('results').hidden = true;   // each role sees only its own result card
     if (mode === 'teacher') newTeacher = true;
     render();
@@ -100,14 +109,16 @@ let state = 'off', det = null, armAt = 0, restUntil = 0, now = 0, endedAt = -1;
 let calm = null;   // { q, t }: orientation and time since which the device has been still
 const flick = flickDetector();
 
-function turnOn(t) { state = 'arming'; armAt = t + settle_s; beep(660, 990); render(); }
-function turnOff(t) {
+function turnOn(t, how) { log('session.on', { how, from: state }); state = 'arming'; armAt = t + settle_s; beep(660, 990); render(); }
+function turnOff(t, how) {
+  log('session.off', { how, from: state });
   det?.stop(t - flickCut_s);
   det = null; live = null; state = 'resting'; restUntil = t + rest_s; beep(990, 660); render();
 }
-$('power').onclick = () => (state === 'off' || state === 'resting' ? turnOn(now) : turnOff(now));
+$('power').onclick = () => (state === 'off' || state === 'resting' ? turnOn(now, 'button') : turnOff(now, 'button'));
 
 function onTake(e, take, why) {
+  log(`take.${e}`, take ? { why, samples: take.length, seconds: +(take.at(-1).t - take[0].t).toFixed(1), mode } : { mode });
   state = e === 'start' ? 'moving' : e === 'cancel' ? state : 'ready';
   if (e === 'ready' && now !== endedAt) beep(880);   // no ready beep right after the take-saved beep
   if (e === 'start') {
@@ -132,13 +143,16 @@ function onSample(s, t) {
   if (mic) s.mic = mic.rms();
   const q = normalize(s.q);
   if (!calm || geodesic(q, calm.q) * DEG > still_deg) calm = { q, t };
-  if (state === 'resting' && t >= restUntil && t - calm.t >= still_s) { state = 'off'; render(); }
+  if (state === 'resting' && t >= restUntil && t - calm.t >= still_s) { log('session.rested'); state = 'off'; render(); }
   if (flick(s.acc, t)) {
-    if (state === 'off') turnOn(t);
-    else if (state !== 'arming' && state !== 'resting') turnOff(t);
+    const energy = Math.round(flick.energy);
+    if (state === 'off') turnOn(t, `flick ${energy}`);
+    else if (state !== 'arming' && state !== 'resting') turnOff(t, `flick ${energy}`);
+    else log('flick.ignored', { state, energy });
     return;
   }
   if (state === 'arming' && t >= armAt) {
+    log('session.armed');
     state = 'waiting'; det = takeDetector({ max_s: cfg.window_s[1] }, onTake); render();
   }
   if (!det) return;
@@ -165,6 +179,8 @@ function finish(r, note = '') {
       store.set('lastCalib', calib);
     }
     const a = ex.analyze(r);
+    log('take.analyzed', { who, strokes: a.strokes.length, durations: a.strokes.map(k => +k.duration.toFixed(1)),
+      fullBowDeg: Math.round(r.calib.fullBowDeg), conj: r.calib.conj });
     if (who === 'teacher') {
       teacher.push(ex.refPart(a)); refA = ex.pool(teacher); store.set('teacher', teacher);
       refSource = 'Recorded here'; store.set('refSource', refSource);
@@ -173,7 +189,7 @@ function finish(r, note = '') {
     } else {
       showResults(a, who, undefined, note);
     }
-  } catch (e) { showResults(null, who, `${cap(who)} take not used: ${e.message}`); }
+  } catch (e) { log('take.error', { who, message: e.message }); showResults(null, who, `${cap(who)} take not used: ${e.message}`); }
   render();
 }
 
