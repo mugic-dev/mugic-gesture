@@ -36,11 +36,10 @@ Motion slower than 1.5°/s can be mistaken for holding still (see `src/takes.js`
 
 ## Photos
 
-Gesture card photos (resized): `images/sonfile.jpg` "Violinist" by pbkwee
-(https://www.flickr.com/photos/11704829@N00/10485567666, CC BY 2.0); `images/shift.jpg` by Joel Timothy
+Gesture card photos (Unsplash License, placeholders for prototyping): `images/sonfile.jpg` by Denny Müller
+(https://unsplash.com/photos/a-woman-playing-a-violin-in-a-park-ptvPoez04A8), `images/shift.jpg` by Joel Timothy
 (https://unsplash.com/photos/person-playing-violin-YY3ijZa2lGQ) and `images/bowchange.jpg` by Eric Soubeyrand de
-Saint Prix (https://unsplash.com/photos/man-playing-violin-in-a-dark-moody-setting-MZzGIswK3pU), both under the
-Unsplash License.
+Saint Prix (https://unsplash.com/photos/man-playing-violin-in-a-dark-moody-setting-MZzGIswK3pU).
 
 ## Layout
 

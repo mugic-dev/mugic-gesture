@@ -56,7 +56,6 @@ button:disabled { opacity: 0.4; cursor: default; }
 .credit { position: relative; z-index: 2; }
 .card h2 { font-size: 26px; color: var(--plum); }
 .card .eyebrow { color: var(--coral); }
-.card.soon img { filter: grayscale(0.6); opacity: 0.8; }
 .card.soon .body { border-top-color: var(--sky); }
 .card.soon .eyebrow { color: var(--muted); }
 .badge { display: inline-block; margin-top: 6px; font-size: 12px; padding: 2px 10px; border-radius: 999px; background: var(--sky); color: var(--plum); }

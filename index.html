@@ -38,7 +38,8 @@
     const GESTURES = [
       { id: 'sonfile', family: 'Violin · bow arm · 1 MUGIC', name: 'Son filé',
         blurb: 'Long, even bow strokes: steady speed, straight path, no wobble.',
-        photo: ['“Violinist” by pbkwee', 'https://www.flickr.com/photos/11704829@N00/10485567666', 'CC BY 2.0', 'https://creativecommons.org/licenses/by/2.0/'] },
+        photo: ['Denny Müller', 'https://unsplash.com/photos/a-woman-playing-a-violin-in-a-park-ptvPoez04A8',
+          'Unsplash License', 'https://unsplash.com/license'] },
       { id: 'shift', family: 'Violin · left hand · 1 MUGIC', name: 'Left-hand shift', soon: true, focus: 'center 45%',
         blurb: 'Clean position shifts: one smooth motion, no overshoot, no correction on landing.',
         photo: ['Joel Timothy', 'https://unsplash.com/photos/person-playing-violin-YY3ijZa2lGQ',
@@ -49,7 +50,7 @@
           'Unsplash License', 'https://unsplash.com/license'] },
     ];
     const $ = id => document.getElementById(id);
-    // Photos are credited on each card (CC BY 2.0 or the Unsplash License); the card opens the gesture, the credit its source.
+    // Photos (Unsplash License, prototype placeholders) are credited on each card; the card opens the gesture, the credit its source.
     $('cards').innerHTML = GESTURES.map(g => `
       <div class="card${g.soon ? ' soon' : ''}">
         ${g.soon ? '' : `<a data-frame href="${g.id}/" class="cover" aria-label="${g.name}"></a>`}
