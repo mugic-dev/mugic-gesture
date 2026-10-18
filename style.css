@@ -43,7 +43,8 @@ tr.bad td { background: var(--bad); }
 .k1 { color: var(--c1); } .k2 { color: var(--c2); } .k3 { color: var(--c3); }
 .now { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 14px; }
 #prompt { color: var(--text); font-size: 17px; }
-#state { display: block; margin-bottom: 8px; color: var(--muted); }
+#state { color: var(--muted); }
+.now .row { margin-bottom: 8px; }
 #state.ready { color: var(--on); }
 #state.moving { color: var(--c2); }
 .hint { font-size: 13px; }

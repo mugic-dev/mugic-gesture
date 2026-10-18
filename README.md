@@ -14,16 +14,20 @@ Web Bluetooth needs Chrome/Edge and a secure origin (`localhost` counts). The MU
 
 ## Hands-free
 
-After Connect, nothing is pressed while playing. Holding still (orientation within 1.5° for 2 s) gets ready
-(high beep); moving starts a take; holding still again ends it (low beep). The first take is the calibration
-(one slow full down-bow, frog to tip), the next becomes the reference, later ones are scored attempts. Motion
-slower than 1.5°/s can be mistaken for holding still (see `src/takes.js`).
+After Connect the app is OFF and ignores motion (scrolling, adjusting). A flick (acceleration spike) turns it
+ON (rising beeps; 1 s to settle) and another flick turns it OFF (falling beeps); there is also an ON/OFF button.
+While ON, holding still (orientation within 1.5° for 2 s) gets ready (high beep), moving starts a take, holding
+still again ends it (low beep) and gets ready for the next. The OFF flick keeps a take in progress up to 0.4 s
+before the flick, or drops it when it has less than 1 s of motion (the flick itself).
+
+The first take is the calibration (one slow full down-bow, frog to tip), the next becomes the reference, later
+ones are scored attempts. Motion slower than 1.5°/s can be mistaken for holding still (see `src/takes.js`).
 
 ## Layout
 
 - `src/quat.js` quaternion / R(q) / yaw-only reset / gravity check (SPEC §3)
 - `src/osc.js`, `src/device.js` OSC parsing and Web Bluetooth connection (one call per MUGIC)
-- `src/takes.js` hands-free take detector
+- `src/takes.js` take detector (hold still / move / hold still); `src/flick.js` ON/OFF flick
 - `src/recording.js` recording file (SPEC §10, one entry per device with its own timestamps)
 - `src/exercises/sonfile.js` son filé (class C): analysis, calibration, scoring
 - `src/app.js`, `src/plot.js`, `index.html`, `style.css` UI

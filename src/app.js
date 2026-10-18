@@ -5,6 +5,7 @@ import { normalize, vdot } from './quat.js';
 import * as ex from './exercises/sonfile.js';
 import { plot } from './plot.js';
 import { takeDetector } from './takes.js';
+import { flickDetector } from './flick.js';
 
 const cfg = ex.config, $ = id => document.getElementById(id);
 const store = {
@@ -20,7 +21,7 @@ function status(text) { $('status').textContent = text; }
 
 $('connect').onclick = async () => {
   try {
-    device = await connect(onSample, () => { device = null; live = null; state = 'waiting'; status('disconnected'); render(); });
+    device = await connect(onSample, () => { device = null; live = null; det = null; state = 'off'; status('disconnected'); render(); });
     status(`connected: ${device.id}`);
   } catch (e) { status(e.message); }
   render();
@@ -45,25 +46,40 @@ $('load').onchange = async e => {
 // What the next take will be used for.
 const nextRole = () => (!calib ? 'calibration' : !reference || $('asRef').checked ? 'reference' : 'attempt');
 
-// Short tone so the player knows the state without looking: high = ready, low = take captured.
+// Short tones so the player knows the state without looking: high = ready, low = take captured,
+// rising pair = ON, falling pair = OFF.
 let audio = null;
-function beep(freq) {
+function beep(...freqs) {
   try {
     audio ??= new AudioContext();
-    const o = audio.createOscillator(), g = audio.createGain();
-    o.frequency.value = freq; g.gain.setValueAtTime(0.2, audio.currentTime);
-    g.gain.exponentialRampToValueAtTime(0.001, audio.currentTime + 0.15);
-    o.connect(g).connect(audio.destination); o.start(); o.stop(audio.currentTime + 0.15);
+    freqs.forEach((freq, i) => {
+      const o = audio.createOscillator(), g = audio.createGain(), t0 = audio.currentTime + i * 0.18;
+      o.frequency.value = freq; g.gain.setValueAtTime(0.2, t0);
+      g.gain.exponentialRampToValueAtTime(0.001, t0 + 0.15);
+      o.connect(g).connect(audio.destination); o.start(t0); o.stop(t0 + 0.15);
+    });
   } catch (e) {}
 }
 
-let state = 'waiting';
-const feed = takeDetector({ max_s: cfg.window_s[1] }, (e, take) => {
-  state = e === 'start' ? 'moving' : 'ready';
+// Session: 'off' (motion ignored) -> flick -> 'arming' (settle_s) -> 'waiting' / 'ready' / 'moving' -> flick -> 'off'.
+const settle_s = 1, flickCut_s = 0.4;
+let state = 'off', det = null, armAt = 0, now = 0;
+const flick = flickDetector();
+
+function turnOn(t) { state = 'arming'; armAt = t + settle_s; beep(660, 990); render(); }
+function turnOff(t) {
+  det?.stop(t - flickCut_s);
+  det = null; live = null; state = 'off'; beep(990, 660); render();
+}
+$('power').onclick = () => (state === 'off' ? turnOn(now) : turnOff(now));
+
+function onTake(e, take) {
+  state = e === 'start' ? 'moving' : e === 'cancel' ? state : 'ready';
   if (e === 'ready') beep(880);
   if (e === 'start') {
     live = { q0: null, f: ex.frame(calib?.axis ?? [0, 0, 1]), t: [], speed: [], off: [], tilt: [], sweep: 0 };
   }
+  if (e === 'cancel') live = null;
   if (e === 'end') {
     beep(440);
     live = null;
@@ -77,16 +93,26 @@ const feed = takeDetector({ max_s: cfg.window_s[1] }, (e, take) => {
     rec = null;
   }
   render();
-});
+}
 
-function onSample(s, now) {
+function onSample(s, t) {
+  now = t;
   if (mic) s.mic = mic.rms();
-  feed(s, now);
+  if (flick(s.acc, t)) {
+    if (state === 'off') turnOn(t);
+    else if (state !== 'arming') turnOff(t);
+    return;
+  }
+  if (state === 'arming' && t >= armAt) {
+    state = 'waiting'; det = takeDetector({ max_s: cfg.window_s[1] }, onTake); render();
+  }
+  if (!det) return;
+  det.feed(s, t);
   if (!live) return;
   const q = normalize(ex.orient(s.q, calib));
   live.q0 ??= q;
-  const a = ex.angles(live.q0, q, live.f), t = now - (live.tStart ??= now);
-  live.t.push(t); live.speed.push(vdot(s.gyro, live.f.axis)); live.off.push(a.off); live.tilt.push(a.tilt);
+  const a = ex.angles(live.q0, q, live.f), lt = t - (live.tStart ??= t);
+  live.t.push(lt); live.speed.push(vdot(s.gyro, live.f.axis)); live.off.push(a.off); live.tilt.push(a.tilt);
   live.sweep = a.sweep;
 }
 
@@ -120,8 +146,13 @@ function render() {
   $('connect').textContent = device ? 'MUGIC connected' : 'Connect MUGIC';
   $('connect').classList.toggle('on', !!device);
   $('prompt').textContent = !device ? 'Connect the MUGIC to start.' : prompts[nextRole()];
-  $('state').textContent = !device ? '' : state === 'moving' ? '● recording' : state === 'ready' ? 'ready: play when you like' : 'hold still…';
+  $('state').textContent = !device ? '' : {
+    off: 'OFF: flick to start', arming: 'ON…', waiting: 'ON: hold still…', ready: 'ready: play when you like',
+    moving: '● recording',
+  }[state];
   $('state').className = state;
+  $('power').textContent = state === 'off' ? 'Turn ON' : 'Turn OFF';
+  $('power').disabled = !device;
   $('live').hidden = !live;
 }
 

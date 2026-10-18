@@ -1,13 +1,16 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { takeDetector } from '../src/takes.js';
+import { flickDetector } from '../src/flick.js';
 import { analyze } from '../src/exercises/sonfile.js';
 import { synthBow } from './synth.js';
 
-function run(rec) {
+// Feed a recording; stopAt = time of an OFF flick.
+function run(rec, stopAt = Infinity) {
   const d = rec.devices[0], events = [], takes = [];
-  const feed = takeDetector({}, (e, take) => { events.push(e); if (take) takes.push(take); });
-  d.t.forEach((t, i) => feed({ q: d.q[i], gyro: d.gyro[i], acc: d.accel[i] }, t));
+  const det = takeDetector({}, (e, take) => { events.push(e); if (take) takes.push(take); });
+  for (let i = 0; i < d.t.length && d.t[i] < stopAt; ++i) det.feed({ q: d.q[i], gyro: d.gyro[i], acc: d.accel[i] }, d.t[i]);
+  if (stopAt < Infinity) det.stop(stopAt - 0.4);
   return { events, takes };
 }
 
@@ -29,4 +32,25 @@ test('a very slow bow is not mistaken for a held pose', () => {
 
 test('no take without a held pose first', () => {
   assert.deepEqual(run(synthBow({ rest: 1 })).events, []);
+});
+
+test('OFF flick mid-take keeps the take up to just before the flick', () => {
+  const { events, takes } = run(synthBow({ rest: 3 }), 20);
+  assert.deepEqual(events, ['ready', 'start', 'end']);
+  assert.ok(takes[0].at(-1).t <= 19.6);
+});
+
+test('OFF flick right after the motion starts cancels the take', () => {
+  // ready at 2 s; the bow starts moving at 3 s, the flick lands at 3.6 s
+  assert.deepEqual(run(synthBow({ rest: 3 }), 3.6).events, ['ready', 'start', 'cancel']);
+});
+
+test('flick fires once per acceleration spike, not on bowing', () => {
+  const fire = flickDetector(), hits = [];
+  for (let i = 0; i < 500; ++i) {
+    const t = i / 50, spike = (i >= 100 && i < 105) || (i >= 300 && i < 304) ? 12 : 0;
+    const acc = [0.8 * Math.sin(t) + spike, 0.5 * Math.cos(2 * t), 0.3];   // bowing-sized linear accel + spikes
+    if (fire(acc, t)) hits.push(t);
+  }
+  assert.deepEqual(hits, [2, 6]);
 });
