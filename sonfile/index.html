@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Son filé · MUGIC Gesture</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Libre+Baskerville:wght@400;700&family=Poppins:wght@400;500;600&display=swap">
+  <link rel="stylesheet" href="../style.css">
+</head>
+<body>
+  <header class="banner small page">
+    <a class="back" href="../">← All gestures</a>
+    <p class="eyebrow">MUGIC Gesture · Violin · bow arm</p>
+    <h1>Son filé</h1>
+    <div class="bar">
+      <button id="connect" class="connect">Connect MUGIC</button>
+      <label><input type="checkbox" id="mic"> Microphone (loudness)</label>
+      <label class="file">Load recording… <input type="file" id="load" accept=".json"></label>
+      <span id="status">not connected</span>
+      <button id="downloadLog" class="small">Download log</button>
+      <button id="clearLog" class="small">Clear log</button>
+    </div>
+  </header>
+
+  <main>
+    <section class="now">
+      <p id="prompt"></p>
+      <div class="row">
+        <span class="seg"><button data-mode="student">Student</button><button data-mode="teacher">Teacher</button></span>
+        <button id="power">Turn ON</button><b id="state"></b>
+        <label><input type="checkbox" id="tickTarget"> Tick at target</label>
+      </div>
+      <ul class="hint">
+        <li>Strap the MUGIC on the bow-arm forearm, just above the wrist.</li>
+        <li>Flick to turn ON (rising beeps).</li>
+        <li>Hold still for 2 s to get ready (high beep), then play. Playing before the beep records nothing: a low double
+          beep and NOT RECORDING say so.</li>
+        <li>Hold still again to end the take (low, then falling beeps): it turns OFF, one take per ON.</li>
+        <li>Or flick to turn OFF mid-take (falling beeps), which also ends the take. Either way, flicks are then ignored for at least 10 s, and until the MUGIC
+          has been laid down still for 2 s.</li>
+        <li>Student takes are scored against the teacher reference. Pick Teacher only to record a reference of your own.</li>
+      </ul>
+    </section>
+
+    <section class="steps">
+      <article id="teacherPanel">
+        <h2>Teacher reference</h2>
+        <p>Each teacher take you record is added to the reference. Clear it to start a new one, or load one from a file.</p>
+        <p><label>Teacher name <input id="teacherName" maxlength="24" placeholder="e.g. MARI"></label></p>
+        <p class="row"><label for="target">Target stroke</label>
+          <input type="range" id="target" min="2" max="60" step="0.5">
+          <input type="number" id="targetNum" min="2" max="60" step="0.5"> s
+          <span id="targetText"></span>
+          <button id="targetAuto" class="small">Use measured</button></p>
+        <div class="row"><ul id="refInfo" class="info"></ul>
+          <button id="viewRef">View reference</button>
+          <button id="saveRef">Save reference</button>
+          <button id="clearRef">Clear reference</button>
+          <label class="file">Load reference… <input type="file" id="loadRef" accept=".json"></label>
+          <button data-save="reference">Download last take</button></div>
+      </article>
+      <article id="studentPanel">
+        <h2>Student</h2>
+        <p id="tempo" class="tempo"></p>
+        <p id="refLine"></p>
+        <div class="row"><button data-save="attempt">Download last take</button></div>
+      </article>
+    </section>
+
+    <section id="live" hidden>
+      <p id="liveState" class="live-state"></p>
+      <h2>Live <span id="elapsed"></span></h2>
+      <div class="timer"><b id="strokeTimer"></b><div class="prog"><i id="strokeProg"></i></div><span id="strokeInfo"></span></div>
+      <div class="bow" id="bow"><span>tip</span><div class="track"><i id="bowPos"></i></div><span>frog</span></div>
+      <h3>Bow speed (°/s, + = down-bow)</h3>
+      <canvas id="liveSpeed"></canvas>
+      <h3><span class="k2">Off-plane</span> and <span class="k3">tilt</span> (°)</h3>
+      <canvas id="liveAngles"></canvas>
+    </section>
+
+    <section id="results" hidden>
+      <h2 id="resultTitle"></h2>
+      <div class="score"><span id="scoreBox"><b id="score">–</b> / 10</span><p id="coach"></p></div>
+      <div id="details">
+      <p id="summary"></p>
+      <table id="metrics"></table>
+      <h3 id="profileTitle"></h3>
+      <canvas id="profile"></canvas>
+      <div id="traceBox">
+      <h3><span class="k2">Off-plane</span> and <span class="k3">tilt</span> over the recording (°)</h3>
+      <canvas id="trace"></canvas>
+      </div>
+      <table id="strokes"></table>
+      </div>
+    </section>
+  </main>
+  <script type="module" src="../src/sonfile-app.js"></script>
+</body>
+</html>
